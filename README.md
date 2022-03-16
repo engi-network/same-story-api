@@ -13,10 +13,6 @@ AWS_SECRET_ACCESS_KEY=
 AWS_DEFAULT_REGION="us-west-2"
 ```
 
-### Start the email server and background worker
-
-Run these locally or in Docker (not both)
-
 #### Docker
 
 `docker-compose up`
