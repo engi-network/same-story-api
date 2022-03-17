@@ -13,6 +13,7 @@ check_component=$(eval jq -r .component $check/specification.json)
 check_story=$(eval jq -r .story $check/specification.json)
 
 check_code=$check/code
+[ -d $check_code ] && rm -rf $check_code
 mkdir $check_code
 
 echo cloning repository
