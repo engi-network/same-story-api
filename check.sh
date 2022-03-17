@@ -39,7 +39,7 @@ check_code_screenshot=$check_code/__screenshots__/Example/$check_component/$chec
 echo running regression with blue hightlight and uploading
 
 blue_difference=blue_difference
-compare $check_code_screenshot $check_frame highlight-color blue $blue_difference.png
+compare $check_code_screenshot $check_frame -highlight-color blue $blue_difference.png
 aws s3 cp $blue_difference.png s3://same-story/checks/$check_id/report/$blue_difference.png
 
 echo running regression with gray hightlight and uploading
