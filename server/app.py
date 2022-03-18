@@ -35,8 +35,32 @@ async def run(cmd):
     return proc.returncode
 
 
+async def worker(queue):
+    while True:
+        # Get a "work item" out of the queue.
+        client, check_id, receipt_handle = await queue.get()
+        # quote the check_id to plug the shell injection security hole
+        returncode = await run(CHECK_CMD.format(check_id=check_id))
+        if returncode == 0:
+            r = await client.delete_message(
+                QueueUrl=QUEUE_URL,
+                ReceiptHandle=receipt_handle,
+            )
+            log.info(f"deleting {receipt_handle=} {r=}")
+        queue.task_done()
+
+
 async def poll_queue():
     session = get_session()
+    # create a queue that we will use to store our "workload"
+    queue = asyncio.Queue()
+
+    tasks = []
+    # create three worker tasks to process the queue concurrently
+    for i in range(3):
+        task = asyncio.create_task(worker(queue))
+        tasks.append(task)
+
     async with session.create_client("sqs") as client:
         while True:
             try:
@@ -49,21 +73,19 @@ async def poll_queue():
                 for m in r.get("Messages", []):
                     msg = json.loads(m["Body"])
                     payload = json.loads(msg["Message"])
-                    log.info(f"got {payload=}")
-                    # quote the check_id to plug the shell injection security hole
-                    returncode = await run(
-                        CHECK_CMD.format(check_id=quote(str(payload["check_id"])))
-                    )
-                    if returncode == 0:
-                        receipt_handle = m["ReceiptHandle"]
-                        r = await client.delete_message(
-                            QueueUrl=QUEUE_URL,
-                            ReceiptHandle=receipt_handle,
-                        )
-                        log.info(f"deleting {receipt_handle=} {r=}")
+                    log.info(f"got payload= {payload=}")
+                    check_id = quote(str(payload["check_id"]))
+                    receipt_handle = m["ReceiptHandle"]
+                    queue.put_nowait((client, check_id, receipt_handle))
 
             except KeyboardInterrupt:
                 break
+
+    # Cancel our worker tasks.
+    for task in tasks:
+        task.cancel()
+    # Wait until all worker tasks are cancelled.
+    await asyncio.gather(*tasks, return_exceptions=True)
 
     log.info("done")
 
