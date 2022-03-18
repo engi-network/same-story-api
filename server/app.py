@@ -13,6 +13,7 @@ load_dotenv()
 
 QUEUE_URL = os.environ["QUEUE_URL"]
 MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 10))
+WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 CHECK_CMD = os.environ.get("CHECK", "sh check.sh {check_id}")
 
 log = setup_logging()
@@ -37,11 +38,12 @@ async def run(cmd):
 
 async def worker(queue):
     while True:
-        # Get a "work item" out of the queue.
+        # get a "work item" out of the queue
         client, check_id, receipt_handle = await queue.get()
-        # quote the check_id to plug the shell injection security hole
+        # run the shell script to do run storybook and capture the screenshots with diffs
         returncode = await run(CHECK_CMD.format(check_id=check_id))
         if returncode == 0:
+            # remove the message from the SQS queue
             r = await client.delete_message(
                 QueueUrl=QUEUE_URL,
                 ReceiptHandle=receipt_handle,
@@ -65,15 +67,18 @@ async def poll_queue():
         while True:
             try:
                 log.info("receiving messages")
+                # grab a message from the SQS queue
                 r = await client.receive_message(
                     QueueUrl=QUEUE_URL,
-                    WaitTimeSeconds=2,
+                    WaitTimeSeconds=WAIT_TIME,
                     MaxNumberOfMessages=MAX_QUEUE_MESSAGES,
                 )
+                # queue up the asyncio queue for the workers to process
                 for m in r.get("Messages", []):
                     msg = json.loads(m["Body"])
                     payload = json.loads(msg["Message"])
                     log.info(f"got payload= {payload=}")
+                    # quote the check_id to plug the shell injection security hole
                     check_id = quote(str(payload["check_id"]))
                     receipt_handle = m["ReceiptHandle"]
                     queue.put_nowait((client, check_id, receipt_handle))

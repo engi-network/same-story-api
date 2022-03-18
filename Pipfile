@@ -10,8 +10,6 @@ coloredlogs = "*"
 python-dotenv = "*"
 
 [dev-packages]
-jupyter-contrib-nbextensions = "*"
-jupyter-nbextensions-configurator = "*"
 jupyterlab = "*"
 
 [requires]
