@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  worker:
+    build: .
+    image: worker
+    container_name: worker
+    #command: python3.9 server/app.py
+    command: sh check.sh 1644302997171
+    volumes:
+      - .:/code
+      - ${HOME}/.npm:${HOME}/.npm
+    env_file: .env
