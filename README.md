@@ -23,6 +23,8 @@ AWS_DEFAULT_REGION="us-west-2"
 
 ### Submit a new job using ES6 and the AWS SDK for JavaScript
 
+Snippet adapted from the [aws-doc-sdk-examples](https://github.com/awsdocs/aws-doc-sdk-examples/blob/main/javascript/example_code/sns/sns_publishtotopic.js).
+
 ```
 import "dotenv/config"
 
