@@ -26,7 +26,8 @@ npm install
 
 echo capturing code screenshots
 
-npm run storycap -- --serverTimeout 300000 --captureTimeout 300000
+#npm run storycap -- --serverTimeout 300000 --captureTimeout 300000
+npm run storycap -- --viewport 400x300
 
 echo uploading code screenshots to s3
 

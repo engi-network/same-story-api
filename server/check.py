@@ -48,11 +48,13 @@ async def check(check_id):
         os.chdir(check_code)
         log.info("npm install")
         await run_raise("npm install")
-        # log.info("install puppeteer")
         # await run_raise("npm install puppeteer")
         log.info("capturing screenshots")
         # await run_raise("npm run storycap -- --serverTimeout 300000 --captureTimeout 300000")
-        await run_raise("npm run storycap")
+        # somehow the screenshot ends up being 2x the dimensions given below, i.e. 800x600
+        await run_raise(
+            "npm run storycap -- --serverTimeout 300000 --captureTimeout 300000 --viewport 400x300"
+        )
         log.info("uploading code screenshots to s3")
         await run_raise(
             f"aws s3 cp {check_code}/__screenshots__ s3://{check_prefix}/report/__screenshots__ --recursive"
@@ -72,7 +74,6 @@ async def check(check_id):
         await run(
             f"compare {check_code_screenshot} {check_frame} -highlight-color blue {blue_difference}"
         )
-        # await run_raise(f"magick {blue_difference} -crop 800x600+0+0 {blue_difference}")
         await run_raise(
             f"aws s3 cp {blue_difference} s3://{check_prefix}/report/{blue_difference}"
         )

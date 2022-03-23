@@ -23,7 +23,7 @@ async def worker(queue):
         # get a "work item" out of the queue
         client, check_id, receipt_handle = await queue.get()
         # run the shell script to do run storybook and capture the screenshots with diffs
-        returncode = 0  # await check(check_id)
+        returncode = await check(check_id)
         if returncode == 0:
             # remove the message from the SQS queue
             r = await client.delete_message(

@@ -15,6 +15,21 @@ AWS_DEFAULT_REGION="us-west-2"
 
 #### Docker
 
+When running Docker on Apple silicon:
+
+```
+docker buildx create --name mybuilder --platform linux/arm64
+docker buildx use mybuilder
+docker buildx inspect --bootstrap
+docker buildx build -t same-story-api:latest --platform linux/arm64 --load .
+```
+
+Run an interactive shell inside the container:
+
+`docker run -i -t same-story-api:latest /bin/bash`
+
+Compose:
+
 `docker-compose up`
 
 #### Locally
