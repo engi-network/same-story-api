@@ -18,20 +18,24 @@ WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 log = setup_logging()
 
 
-async def worker(queue):
+async def worker(n, queue):
     while True:
         # get a "work item" out of the queue
         client, check_id, receipt_handle = await queue.get()
         # run the shell script to do run storybook and capture the screenshots with diffs
-        returncode = await check(check_id)
-        if returncode == 0:
-            # remove the message from the SQS queue
-            r = await client.delete_message(
-                QueueUrl=QUEUE_URL,
-                ReceiptHandle=receipt_handle,
-            )
-            log.info(f"deleting {receipt_handle=} {r=}")
-        queue.task_done()
+        log.info(f"worker {n} got {check_id=}")
+        try:
+            returncode = await check(check_id)
+            if returncode == 0:
+                # remove the message from the SQS queue
+                r = await client.delete_message(
+                    QueueUrl=QUEUE_URL,
+                    ReceiptHandle=receipt_handle,
+                )
+                log.info(f"worker {n} deleting {receipt_handle=} {r=}")
+            queue.task_done()
+        except Exception as e:
+            log.exception(e)
 
 
 async def poll_queue():
@@ -41,8 +45,8 @@ async def poll_queue():
 
     tasks = []
     # create three worker tasks to process the queue concurrently
-    for i in range(3):
-        task = asyncio.create_task(worker(queue))
+    for n in range(3):
+        task = asyncio.create_task(worker(n, queue))
         tasks.append(task)
 
     async with session.create_client("sqs") as client:
