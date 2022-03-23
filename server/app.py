@@ -26,16 +26,17 @@ async def worker(n, queue):
         log.info(f"worker {n} got {check_id=}")
         try:
             returncode = await check(check_id)
-            if returncode == 0:
-                # remove the message from the SQS queue
-                r = await client.delete_message(
-                    QueueUrl=QUEUE_URL,
-                    ReceiptHandle=receipt_handle,
-                )
-                log.info(f"worker {n} deleting {receipt_handle=} {r=}")
-            queue.task_done()
+            # TODO should only delete message on successful
         except Exception as e:
             log.exception(e)
+        # if returncode == 0:
+        # remove the message from the SQS queue
+        r = await client.delete_message(
+            QueueUrl=QUEUE_URL,
+            ReceiptHandle=receipt_handle,
+        )
+        log.info(f"worker {n} deleting {receipt_handle=} {r=}")
+        queue.task_done()
 
 
 async def poll_queue():
