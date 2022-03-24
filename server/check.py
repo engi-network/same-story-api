@@ -32,6 +32,7 @@ def get_port():
 
 
 async def run(cmd):
+    log.info(cmd)
     t1_start = perf_counter()
     proc = await asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
     stdout, stderr = await proc.communicate()
@@ -57,6 +58,13 @@ def gettempdir():
     return Path(os.environ.get("TMPDIR", "/tmp/"))
 
 
+def get_dims(spec):
+    # somehow the screenshot ends up being 2x the dimensions given below!
+    height = int(spec.get("height", "600")) // 2
+    width = int(spec.get("width", "800")) // 2
+    return f"{width}x{height}"
+
+
 async def check(check_id):
     t1_start = perf_counter()
     check_prefix = Path(f"same-story/checks/{check_id}")
@@ -68,23 +76,27 @@ async def check(check_id):
     log.info(f"loaded spec {spec=}")
     check_repo = spec["repository"]
     check_code = check_dir / "code"
-    if check_code.exists():  # TODO incremental updates
-        shutil.rmtree(check_code)
-    await run_raise(f"gh repo clone {check_repo} {check_code}")
+    branch = spec.get("branch")
+    commit = spec.get("commit")
+    sync = True
+    if not check_code.exists():
+        sync = False
+        await run_raise(f"gh repo clone {check_repo} {check_code}")
     with set_directory(check_code):
-        log.info("npm install")
+        if sync:
+            # stash any local changes, e.g. package-lock.json
+            await run_raise(f"git stash")
+            # perform incremental update
+            branch_cmd = f" --branch {branch}" if branch is not None else ""
+            await run_raise(f"gh repo sync{branch_cmd}")
+        if commit:
+            await run_raise(f"git checkout {commit}")
         await run_raise("npm install")
-        # await run_raise("npm install puppeteer")
         log.info("capturing screenshots")
-        # await run_raise("npm run storycap -- --serverTimeout 300000 --captureTimeout 300000")
-        # somehow the screenshot ends up being 2x the dimensions given below, i.e. 800x600
-        # TODO still can't run two jobs concurrently b/c port clash
-        # await run_raise(
-        #    "npm run storycap -- --serverTimeout 300000 --captureTimeout 300000 --viewport 400x300"
-        # )
+        # TODO even when specifying a different port for each run, storycap doesn't work concurrently
         port = get_port()
         await run_raise(
-            f"npx storycap http://localhost:{port} --viewport 400x300 --serverCmd 'start-storybook -p {port}'"
+            f"npx storycap http://localhost:{port} --viewport {get_dims(spec)} --serverCmd 'start-storybook -p {port}'"
         )
         log.info("uploading code screenshots to s3")
         await run_raise(

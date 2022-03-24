@@ -45,8 +45,8 @@ async def poll_queue():
     queue = asyncio.Queue()
 
     tasks = []
-    # create three worker tasks to process the queue concurrently
-    for n in range(3):
+    # storybook seems not to like concurrency
+    for n in range(1):
         task = asyncio.create_task(worker(n, queue))
         tasks.append(task)
 
