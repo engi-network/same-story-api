@@ -4,10 +4,7 @@ services:
   worker:
     platform: linux/arm64/v8
     build: .
-    image: worker
-    container_name: worker
     command: python3.9 server/app.py
-    #command: python3.9 server/check.py 1644302997171
     volumes:
       - .:/code
       - ${HOME}/.npm:${HOME}/.npm

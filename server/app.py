@@ -12,7 +12,7 @@ from helpful_scripts import setup_logging
 load_dotenv()
 
 QUEUE_URL = os.environ["QUEUE_URL"]
-MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 10))
+MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 1))
 WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 
 log = setup_logging()
@@ -42,7 +42,7 @@ async def worker(n, queue):
 async def poll_queue():
     session = get_session()
     # create a queue that we will use to store our "workload"
-    queue = asyncio.Queue()
+    queue = asyncio.Queue(maxsize=MAX_QUEUE_MESSAGES)
 
     tasks = []
     # storybook seems not to like concurrency

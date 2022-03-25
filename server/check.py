@@ -108,15 +108,17 @@ async def check(check_id):
                 await run_raise(f"git checkout {commit}", msg=e_msg["commit"])
             await run_raise("npm install", msg=e_msg["install"])
             log.info("capturing screenshots")
-            # TODO even when specifying a different port for each run, storycap doesn't work concurrently
+            # TODO concurrency
             port = get_port()
             await run_raise(
-                f"npx storycap http://localhost:{port} --viewport {get_dims(spec)} --serverCmd 'start-storybook -p {port}'",
+                f"npx storycap http://localhost:{port} --viewport {get_dims(spec)} "
+                f"--serverCmd 'start-storybook -p {port}'",
                 msg=e_msg["storycap"],
             )
             log.info("uploading code screenshots to s3")
             await run_raise(
-                f"aws s3 cp {check_code}/__screenshots__ s3://{check_prefix}/report/__screenshots__ --recursive",
+                f"aws s3 cp {check_code}/__screenshots__ "
+                f"s3://{check_prefix}/report/__screenshots__ --recursive",
                 msg=e_msg["aws"],
             )
             log.info("running visual comparisons")
