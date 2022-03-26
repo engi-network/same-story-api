@@ -11,6 +11,7 @@ python-dotenv = "*"
 
 [dev-packages]
 jupyterlab = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.9"
