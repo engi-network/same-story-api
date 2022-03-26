@@ -38,20 +38,8 @@ def exists(key_name):
     return "Contents" in r
 
 
-@pytest.fixture
-def results():
-    check_id = str(uuid4())
-    print(f"{check_id=}")
-    spec_d = {
-        "check": check_id,
-        "width": "800",
-        "height": "600",
-        "component": "Button",
-        "story": "Primary",
-        "repository": "engi-network/engi-ui",
-        "branch": "master",  # optional
-        "commit": "2f513f8411b438f140ddef716ea92d479bc76f81",  # optional
-    }
+def get_results(spec_d):
+    check_id = spec_d["check"]
     prefix = f"checks/{check_id}"
     spec = f"{prefix}/specification.json"
     results = f"{prefix}/report/results.json"
@@ -87,13 +75,46 @@ def results():
     return results_d
 
 
-def test_should_be_able_to_successfully_run_check(results):
-    print(f"{results=}")
+@pytest.fixture
+def success_spec():
+    check_id = str(uuid4())
+    return {
+        "check": check_id,
+        "width": "800",
+        "height": "600",
+        "component": "Button",
+        "story": "Primary",
+        "repository": "engi-network/engi-ui",
+        "branch": "master",  # optional
+        "commit": "2f513f8411b438f140ddef716ea92d479bc76f81",  # optional
+    }
 
-    assert "results" in results
-    assert not "error" in results
 
-    check_id = results["spec"]["check"]
+@pytest.fixture
+def success_results(success_spec):
+    return get_results(success_spec)
+
+
+@pytest.fixture
+def success_results_no_commit_branch(success_spec):
+    del success_spec["branch"]
+    del success_spec["commit"]
+    return get_results(success_spec)
+
+
+def test_should_be_able_to_successfully_run_check_no_branch_commit(
+    success_results_no_commit_branch,
+):
+    return test_should_be_able_to_successfully_run_check(success_results_no_commit_branch)
+
+
+def test_should_be_able_to_successfully_run_check(success_results):
+    print(f"{success_results=}")
+
+    assert "results" in success_results
+    assert not "error" in success_results
+
+    check_id = success_results["spec"]["check"]
     prefix = f"checks/{check_id}"
     gray_difference = f"{prefix}/report/gray_difference.png"
     blue_difference = gray_difference.replace("gray", "blue")
@@ -107,7 +128,7 @@ def test_should_be_able_to_successfully_run_check(results):
 
     # check for the objective visual difference between the check frame and the
     # screenshot captured by storycap
-    mae = float(results["results"]["MAE"].split()[0])
+    mae = float(success_results["results"]["MAE"].split()[0])
     assert mae < 5.0
 
     # clean up the directory in S3
