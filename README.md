@@ -43,7 +43,6 @@ When running Docker on Apple silicon:
 docker buildx create --name mybuilder --platform linux/arm64
 docker buildx use mybuilder
 docker buildx inspect --bootstrap
-docker buildx build -t same-story-api:latest --platform linux/arm64 --load .
 ```
 
 The key point here for Apple is `--platform linux/arm64`. Don't try and run
