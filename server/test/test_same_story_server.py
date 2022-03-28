@@ -72,6 +72,7 @@ def get_results(spec_d):
         count -= 1
         assert count != 0
 
+    print(f"got {results_d=}")
     return results_d
 
 
@@ -92,25 +93,60 @@ def success_spec():
 
 @pytest.fixture
 def success_results(success_spec):
-    return get_results(success_spec)
+    yield get_results(success_spec)
+    cleanup(success_spec)
+
+
+@pytest.fixture
+def error_results_repo(success_spec):
+    success_spec["repository"] = "nonsense"
+    yield get_results(success_spec)
+    cleanup(success_spec)
+
+
+@pytest.fixture
+def error_results_commit(success_spec):
+    success_spec["commit"] = "nonsense"
+    yield get_results(success_spec)
+    cleanup(success_spec)
+
+
+@pytest.fixture
+def error_results_branch(success_spec):
+    success_spec["branch"] = "nonsense"
+    yield get_results(success_spec)
+    cleanup(success_spec)
+
+
+@pytest.fixture
+def error_results_frame(success_spec):
+    success_spec["branch"] = "nonsense"
+    yield get_results(success_spec)
+    cleanup(success_spec)
 
 
 @pytest.fixture
 def success_results_no_commit_branch(success_spec):
     del success_spec["branch"]
     del success_spec["commit"]
-    return get_results(success_spec)
+    yield get_results(success_spec)
+    cleanup(success_spec)
 
 
-def test_should_be_able_to_successfully_run_check_no_branch_commit(
-    success_results_no_commit_branch,
-):
-    return test_should_be_able_to_successfully_run_check(success_results_no_commit_branch)
+def get_error(results, key):
+    assert not "results" in results
+    assert key in results["error"].keys()
+
+
+def cleanup(spec):
+    check_id = spec["check"]
+    print(f"cleaning up {check_id=}")
+    prefix = f"checks/{check_id}"
+    # clean up the directory in S3
+    delete(prefix)
 
 
 def test_should_be_able_to_successfully_run_check(success_results):
-    print(f"{success_results=}")
-
     assert "results" in success_results
     assert not "error" in success_results
 
@@ -131,21 +167,20 @@ def test_should_be_able_to_successfully_run_check(success_results):
     mae = float(success_results["results"]["MAE"].split()[0])
     assert mae < 5.0
 
-    # clean up the directory in S3
-    delete(prefix)
+
+def test_should_be_able_to_successfully_run_check_no_branch_commit(
+    success_results_no_commit_branch,
+):
+    return test_should_be_able_to_successfully_run_check(success_results_no_commit_branch)
 
 
-def test_should_error_on_repo_problem():
-    pass
+def test_should_error_on_branch_problem(error_results_branch):
+    get_error(error_results_branch, "branch")
 
 
-def test_should_error_on_branch_problem():
-    pass
+def test_should_error_on_repo_problem(error_results_repo):
+    get_error(error_results_repo, "clone")
 
 
-def test_should_error_on_commit_problem():
-    pass
-
-
-def test_should_error_on_missing_frame():
-    pass
+def test_should_error_on_commit_problem(error_results_commit):
+    get_error(error_results_commit, "commit")

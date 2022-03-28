@@ -64,7 +64,7 @@ async def poll_queue():
                 for m in r.get("Messages", []):
                     msg = json.loads(m["Body"])
                     payload = json.loads(msg["Message"])
-                    log.info(f"got payload= {payload=}")
+                    log.info(f"got {payload=}")
                     # quote the check_id to plug the shell injection security hole
                     check_id = quote(str(payload["check_id"]))
                     receipt_handle = m["ReceiptHandle"]

@@ -101,6 +101,7 @@ async def check(check_id):
     check_code = check_dir / "code"
     error = "error.json"
     branch = spec.get("branch")
+    branch_cmd = f" --branch {branch}" if branch is not None else ""
     commit = spec.get("commit")
     sync = True
     try:
@@ -111,8 +112,7 @@ async def check(check_id):
             if sync:
                 # stash any local changes, e.g. package-lock.json
                 await run_raise(f"git stash", e_key="clone")
-                # perform incremental update
-                branch_cmd = f" --branch {branch}" if branch is not None else ""
+            if branch:
                 await run_raise(f"gh repo sync{branch_cmd}", e_key="branch")
             if commit:
                 await run_raise(f"git checkout {commit}", e_key="commit")
