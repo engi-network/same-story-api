@@ -46,16 +46,23 @@ docker buildx inspect --bootstrap
 docker buildx build -t same-story-api:latest --platform linux/arm64 --load .
 ```
 
+The key point here for Apple is `--platform linux/arm64`. Don't try and run
+`linux/amd64` because Chromium will segfault with a QMEU error and it won't be
+obvious why.
+
 Run an interactive shell inside the container:
 
-`docker run -i -t same-story-api:latest /bin/bash`
+```
+docker buildx build -t same-story-api:latest --platform linux/arm64 --load .
+docker run -i -t same-story-api:latest /bin/bash
+```
 
-Compose:
+Or use `docker-compose`:
 
 `docker-compose up`
 
 The server can only process one job at a time because storycap doesn't seem to
-like multiple simultaneous jobs even when a different port is used. 
+like multiple simultaneous jobs even when a different port is used for each.
 
 To process more than one job concurrently, run a bunch of Docker containers like
 this:
