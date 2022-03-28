@@ -12,6 +12,7 @@ from helpful_scripts import setup_logging
 load_dotenv()
 
 QUEUE_URL = os.environ["QUEUE_URL"]
+# if storycap wouldn't mind us running multiple jobs concurrently, we could up this
 MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 1))
 WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 
@@ -20,16 +21,14 @@ log = setup_logging()
 
 async def worker(n, queue):
     while True:
-        # get a "work item" out of the queue
+        # dequeue a "work item"
         client, check_id, receipt_handle = await queue.get()
         # run the shell script to do run storybook and capture the screenshots with diffs
         log.info(f"worker {n} got {check_id=}")
         try:
-            returncode = await check(check_id)
-            # TODO should only delete message on successful
+            await check(check_id)
         except Exception as e:
             log.exception(e)
-        # if returncode == 0:
         # remove the message from the SQS queue
         r = await client.delete_message(
             QueueUrl=QUEUE_URL,
