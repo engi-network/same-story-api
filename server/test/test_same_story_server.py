@@ -39,7 +39,7 @@ def exists(key_name):
 
 
 def get_results(spec_d):
-    check_id = spec_d["check"]
+    check_id = spec_d["check_id"]
     prefix = f"checks/{check_id}"
     spec = f"{prefix}/specification.json"
     results = f"{prefix}/report/results.json"
@@ -75,7 +75,7 @@ def get_results(spec_d):
 @pytest.fixture
 def success_spec():
     return {
-        "check": str(uuid4()),
+        "check_id": str(uuid4()),
         "width": "800",
         "height": "600",
         "component": "Button",
@@ -133,7 +133,7 @@ def get_error(results, key):
 
 
 def cleanup(spec):
-    check_id = spec["check"]
+    check_id = spec["check_id"]
     print(f"cleaning up {check_id=}")
     prefix = f"checks/{check_id}"
     # clean up the directory in S3
@@ -144,7 +144,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     results = success_results["results"]
     assert not "error" in results
 
-    check_id = success_results["spec"]["check"]
+    check_id = success_results["spec"]["check_id"]
     prefix = f"checks/{check_id}"
     gray_difference = f"{prefix}/report/gray_difference.png"
     blue_difference = gray_difference.replace("gray", "blue")
