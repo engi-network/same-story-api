@@ -66,7 +66,7 @@ class CheckError(Exception):
         return CheckError.messages[self.e_key]
 
     def toJSON(self):
-        return json.dumps({self.e_key: str(self)})
+        return json.dumps({"error": {self.e_key: str(self)}})
 
 
 async def run_raise(cmd, returncode=0, e_key=None):
@@ -99,7 +99,7 @@ async def check(check_id):
     log.info(f"loaded spec {spec=}")
     check_repo = spec["repository"]
     check_code = check_dir / "code"
-    error = "error.json"
+    results = "results.json"
     branch = spec.get("branch")
     branch_cmd = f" --branch {branch}" if branch is not None else ""
     commit = spec.get("commit")
@@ -179,17 +179,15 @@ async def check(check_id):
             _, _, stderr = await run(
                 f"compare -metric MAE {check_code_screenshot} {check_frame} null"
             )
-            results = "results.json"
             json.dump({"MAE": stderr.decode()}, open(results, "w"))
             await run_raise(
                 f"aws s3 cp {results} s3://{check_prefix}/report/{results}", e_key="aws"
             )
-            await run(f"aws s3 rm s3://{check_prefix}/report/{error}")
     except CheckError as e:
         log.exception(e)
-        error_file = check_dir / error
-        open(error_file, "w").write(e.toJSON())
-        await run_raise(f"aws s3 cp {error_file} s3://{check_prefix}/report/{error}")
+        results_file = check_dir / results
+        open(results_file, "w").write(e.toJSON())
+        await run_raise(f"aws s3 cp {results_file} s3://{check_prefix}/report/{results}")
 
     t1_stop = perf_counter()
     log.info(f"check done {t1_stop - t1_start} seconds")

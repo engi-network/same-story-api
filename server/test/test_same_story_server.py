@@ -43,7 +43,6 @@ def get_results(spec_d):
     prefix = f"checks/{check_id}"
     spec = f"{prefix}/specification.json"
     results = f"{prefix}/report/results.json"
-    error = f"{prefix}/report/error.json"
     button = Path(f"{prefix}/frames/Button-Primary.png")
 
     # upload specification.json
@@ -64,9 +63,6 @@ def get_results(spec_d):
         print(f"looking for {results=}")
         if exists(results):
             results_d["results"] = json.loads(download(results))
-            break
-        if exists(error):
-            results_d["error"] = json.loads(download(error))
             break
 
         count -= 1
@@ -133,8 +129,7 @@ def success_results_no_commit_branch(success_spec):
 
 
 def get_error(results, key):
-    assert not "results" in results
-    assert key in results["error"].keys()
+    assert key in results["results"]["error"].keys()
 
 
 def cleanup(spec):
@@ -146,8 +141,8 @@ def cleanup(spec):
 
 
 def test_should_be_able_to_successfully_run_check(success_results):
-    assert "results" in success_results
-    assert not "error" in success_results
+    results = success_results["results"]
+    assert not "error" in results
 
     check_id = success_results["spec"]["check"]
     prefix = f"checks/{check_id}"
@@ -163,7 +158,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
 
     # check for the objective visual difference between the check frame and the
     # screenshot captured by storycap
-    mae = float(success_results["results"]["MAE"].split()[0])
+    mae = float(results["MAE"].split()[0])
     assert mae < 5.0
 
 
