@@ -78,9 +78,8 @@ def get_results(spec_d):
 
 @pytest.fixture
 def success_spec():
-    check_id = str(uuid4())
     return {
-        "check": check_id,
+        "check": str(uuid4()),
         "width": "800",
         "height": "600",
         "component": "Button",

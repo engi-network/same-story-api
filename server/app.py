@@ -67,15 +67,16 @@ async def poll_queue():
                     # quote the check_id to plug the shell injection security hole
                     check_id = quote(str(payload["check_id"]))
                     receipt_handle = m["ReceiptHandle"]
-                    queue.put_nowait((client, check_id, receipt_handle))
+                    # if the queue is full, wait until a free slot is available
+                    await queue.put((client, check_id, receipt_handle))
 
             except KeyboardInterrupt:
                 break
 
-    # Cancel our worker tasks.
+    # cancel our worker tasks.
     for task in tasks:
         task.cancel()
-    # Wait until all worker tasks are cancelled.
+    # wait until all worker tasks are cancelled.
     await asyncio.gather(*tasks, return_exceptions=True)
 
     log.info("done")
