@@ -7,7 +7,7 @@ import sys
 from asyncio.subprocess import PIPE
 from contextlib import contextmanager
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, time
 
 from helpful_scripts import setup_logging
 
@@ -179,7 +179,13 @@ async def check(check_id):
             _, _, stderr = await run(
                 f"compare -metric MAE {check_code_screenshot} {check_frame} null"
             )
-            json.dump({"MAE": stderr.decode()}, open(results, "w"))
+            t1_stop = perf_counter()
+            log.info(f"check done {t1_stop - t1_start} seconds")
+            now = time()
+            json.dump(
+                {"MAE": stderr.decode(), "created_at": now - t1_start, "completed_at": now},
+                open(results, "w"),
+            )
             await run_raise(
                 f"aws s3 cp {results} s3://{check_prefix}/report/{results}", e_key="aws"
             )
@@ -189,8 +195,6 @@ async def check(check_id):
         open(results_file, "w").write(e.toJSON())
         await run_raise(f"aws s3 cp {results_file} s3://{check_prefix}/report/{results}")
 
-    t1_stop = perf_counter()
-    log.info(f"check done {t1_stop - t1_start} seconds")
     return 0
 
 

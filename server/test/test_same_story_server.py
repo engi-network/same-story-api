@@ -160,6 +160,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     # screenshot captured by storycap
     mae = float(results["MAE"].split()[0])
     assert mae < 5.0
+    assert results["completed_at"] > results["created_at"]
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(
