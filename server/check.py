@@ -183,7 +183,12 @@ async def check(check_id):
             log.info(f"check done {t1_stop - t1_start} seconds")
             now = time()
             json.dump(
-                {"MAE": stderr.decode(), "created_at": now - t1_start, "completed_at": now},
+                {
+                    **spec,
+                    "MAE": stderr.decode(),
+                    "created_at": now - t1_start,
+                    "completed_at": now,
+                },
                 open(results, "w"),
             )
             await run_raise(

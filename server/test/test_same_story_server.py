@@ -142,6 +142,7 @@ def cleanup(spec):
 
 def test_should_be_able_to_successfully_run_check(success_results):
     results = success_results["results"]
+    spec = success_results["spec"]
     assert not "error" in results
 
     check_id = success_results["spec"]["check_id"]
@@ -160,7 +161,11 @@ def test_should_be_able_to_successfully_run_check(success_results):
     # screenshot captured by storycap
     mae = float(results["MAE"].split()[0])
     assert mae < 5.0
+    # check timestamps
     assert results["completed_at"] > results["created_at"]
+    # check spec got copied into results
+    for key, val in spec.items():
+        assert results[key] == val
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(
