@@ -135,9 +135,8 @@ def check_spec_in_results(spec, results):
 
 
 def get_error(results, key):
-    results_d = results["results"]
-    check_spec_in_results(results["spec"], results_d)
-    assert key in results_d["error"].keys()
+    check_spec_in_results(results["spec"], results["results"])
+    assert key in results["results"]["error"].keys()
 
 
 def cleanup(spec):
