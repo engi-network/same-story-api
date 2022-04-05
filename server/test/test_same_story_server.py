@@ -128,8 +128,16 @@ def success_results_no_commit_branch(success_spec):
     cleanup(success_spec)
 
 
+def check_spec_in_results(spec, results):
+    # check spec got copied into results
+    for key, val in spec.items():
+        assert results[key] == val
+
+
 def get_error(results, key):
-    assert key in results["results"]["error"].keys()
+    results_d = results["results"]
+    check_spec_in_results(results["spec"], results_d)
+    assert key in results_d["error"].keys()
 
 
 def cleanup(spec):
@@ -163,9 +171,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     assert mae < 5.0
     # check timestamps
     assert results["completed_at"] > results["created_at"]
-    # check spec got copied into results
-    for key, val in spec.items():
-        assert results[key] == val
+    check_spec_in_results(spec, results)
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(

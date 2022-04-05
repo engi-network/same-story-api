@@ -4,6 +4,7 @@ import json
 import os
 import socket
 import sys
+from ast import dump
 from asyncio.subprocess import PIPE
 from contextlib import contextmanager
 from pathlib import Path
@@ -65,8 +66,8 @@ class CheckError(Exception):
     def __str__(self):
         return CheckError.messages[self.e_key]
 
-    def toJSON(self):
-        return json.dumps({"error": {self.e_key: str(self)}})
+    def to_dict(self):
+        return {"error": {self.e_key: str(self)}}
 
 
 async def run_raise(cmd, returncode=0, e_key=None):
@@ -197,7 +198,9 @@ async def check(check_id):
     except CheckError as e:
         log.exception(e)
         results_file = check_dir / results
-        open(results_file, "w").write(e.toJSON())
+        d = {**spec, **e.to_dict()}
+        log.error(f"{d=}")
+        json.dump(d, open(results_file, "w"))
         await run_raise(f"aws s3 cp {results_file} s3://{check_prefix}/report/{results}")
 
     return 0
