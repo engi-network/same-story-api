@@ -1,0 +1,12 @@
+.env
+terraform.tfvars
+.terraform*
+
+.vscode
+
+__pycache__/
+*.py[cod]
+
+Pipfile.lock
+
+.ipynb_checkpoints

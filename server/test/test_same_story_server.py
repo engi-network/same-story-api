@@ -80,7 +80,7 @@ def success_spec():
         "height": "600",
         "component": "Button",
         "story": "Primary",
-        "repository": "engi-network/engi-ui",
+        "repository": "engi-network/figma-plugin",
         "branch": "master",  # optional
         "commit": "2f513f8411b438f140ddef716ea92d479bc76f81",  # optional
     }
