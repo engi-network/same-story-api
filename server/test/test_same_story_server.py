@@ -84,7 +84,7 @@ def success_spec():
         "component": "Button",
         "story": "Button With Knobs",
         "repository": "engi-network/figma-plugin",
-        # "branch": "master",  # optional
+        "branch": "main",  # optional
         "commit": "b7843ac1a0b66da9b84a516d9970749d5e8a8b5a",  # optional
     }
 
