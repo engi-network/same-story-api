@@ -43,7 +43,9 @@ def get_results(spec_d):
     prefix = f"checks/{check_id}"
     spec = f"{prefix}/specification.json"
     results = f"{prefix}/report/results.json"
-    button = Path(f"{prefix}/frames/Button-Primary.png")
+    story = spec_d["story"]
+    check_frame = f"{story}.png"
+    button = Path(f"{prefix}/frames/{check_frame}")
 
     # upload specification.json
     upload(spec, json.dumps(spec_d))
@@ -78,11 +80,12 @@ def success_spec():
         "check_id": str(uuid4()),
         "width": "800",
         "height": "600",
+        "path": "Global/Components",
         "component": "Button",
-        "story": "Primary",
+        "story": "Button With Knobs",
         "repository": "engi-network/figma-plugin",
-        "branch": "master",  # optional
-        "commit": "2f513f8411b438f140ddef716ea92d479bc76f81",  # optional
+        # "branch": "master",  # optional
+        "commit": "b7843ac1a0b66da9b84a516d9970749d5e8a8b5a",  # optional
     }
 
 
@@ -136,7 +139,9 @@ def check_spec_in_results(spec, results):
 
 def get_error(results, key):
     check_spec_in_results(results["spec"], results["results"])
-    assert key in results["results"]["error"].keys()
+    # key is the step where our job failed
+    # stdout and stderr should tell us why
+    assert set(results["results"]["error"].keys()) >= set([key, "stdout", "stderr"])
 
 
 def cleanup(spec):
@@ -149,17 +154,17 @@ def cleanup(spec):
 
 def test_should_be_able_to_successfully_run_check(success_results):
     results = success_results["results"]
-    spec = success_results["spec"]
+    spec_d = success_results["spec"]
     assert not "error" in results
 
     check_id = success_results["spec"]["check_id"]
     prefix = f"checks/{check_id}"
     gray_difference = f"{prefix}/report/gray_difference.png"
     blue_difference = gray_difference.replace("gray", "blue")
-    primary = f"{prefix}/report/__screenshots__/Example/Button/Primary.png"
+    button = f"{prefix}/report/__screenshots__/{spec_d['path']}/{spec_d['component']}/{spec_d['story']}.png"
 
     # check for the screenshot captured by storycap
-    assert exists(primary)
+    assert exists(button)
     # check for the output comparison images in S3
     assert exists(gray_difference)
     assert exists(blue_difference)
@@ -170,7 +175,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     assert mae < 5.0
     # check timestamps
     assert results["completed_at"] > results["created_at"]
-    check_spec_in_results(spec, results)
+    check_spec_in_results(spec_d, results)
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(

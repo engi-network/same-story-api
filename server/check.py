@@ -9,6 +9,7 @@ from asyncio.subprocess import PIPE
 from contextlib import contextmanager
 from pathlib import Path
 from time import perf_counter, time
+from tkinter import W
 
 from helpful_scripts import setup_logging
 
@@ -38,12 +39,14 @@ async def run(cmd):
     t1_start = perf_counter()
     proc = await asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
     stdout, stderr = await proc.communicate()
+    stdout = stdout.decode() if stdout else None
+    stderr = stderr.decode() if stderr else None
     t1_stop = perf_counter()
 
     if stdout:
-        log.info(f"[stdout]\n{stdout.decode()}")
+        log.info(f"[stdout]\n{stdout}")
     if stderr:
-        log.info(f"[stderr]\n{stderr.decode()}")
+        log.info(f"[stderr]\n{stderr}")
     log.info(f"{cmd!r} exited with code {proc.returncode} elapsed {t1_stop - t1_start} seconds")
     return proc.returncode, stdout, stderr
 
@@ -60,21 +63,29 @@ class CheckError(Exception):
         "comp": _("failed to generate visual comparison"),
     }
 
-    def __init__(self, e_key):
+    def __init__(self, e_key, stdout=None, stderr=None):
         self.e_key = e_key
+        self.stdout = stdout
+        self.stderr = stderr
 
     def __str__(self):
         return CheckError.messages[self.e_key]
 
     def to_dict(self):
-        return {"error": {self.e_key: str(self)}}
+        return {
+            "error": {
+                self.e_key: str(self),
+                "stdout": self.stdout,
+                "stderr": self.stderr,
+            }
+        }
 
 
 async def run_raise(cmd, returncode=0, e_key=None):
-    retval = await run(cmd)
-    if retval[0] != returncode:
-        raise CheckError(e_key)
-    return retval
+    returncode_, stdout, stderr = await run(cmd)
+    if returncode_ != returncode:
+        raise CheckError(e_key, stdout, stderr)
+    return returncode_
 
 
 def gettempdir():
@@ -138,9 +149,10 @@ async def check(check_id):
             log.info("running visual comparisons")
             check_story = spec["story"]
             check_component = spec["component"]
-            check_frame = check_dir / f"frames/{check_component}-{check_story}.png"
+            path = spec["path"]
+            check_frame = check_dir / f"frames/{check_story}.png"
             check_code_screenshot = (
-                check_code / f"__screenshots__/Example/{check_component}/{check_story}.png"
+                check_code / f"__screenshots__/{path}/{check_component}/{check_story}.png"
             )
             if not check_frame.exists():
                 raise CheckError("frame")
@@ -151,7 +163,7 @@ async def check(check_id):
             blue_difference = Path("blue_difference.png")
             # compare exits with code 1 even though it seems to have run successfully
             await run(
-                f"compare {check_code_screenshot} {check_frame} "
+                f"compare '{check_code_screenshot}' '{check_frame}' "
                 f"-highlight-color blue {blue_difference}"
             )
             if not blue_difference.exists():
@@ -164,8 +176,8 @@ async def check(check_id):
             log.info("running regression with gray hightlight and uploading")
             gray_difference = Path("gray_difference.png")
             await run_raise(
-                f"convert {check_code_screenshot} -flatten -grayscale Rec709Luminance "
-                f"{check_frame} -flatten -grayscale Rec709Luminance "
+                f"convert '{check_code_screenshot}' -flatten -grayscale Rec709Luminance "
+                f"'{check_frame}' -flatten -grayscale Rec709Luminance "
                 "-clone 0-1 -compose darken -composite "
                 f"-channel RGB -combine {gray_difference}",
                 e_key="comp",
@@ -178,7 +190,7 @@ async def check(check_id):
             )
             # compare exits with code 1 even though it seems to have run successfully
             _, _, stderr = await run(
-                f"compare -metric MAE {check_code_screenshot} {check_frame} null"
+                f"compare -metric MAE '{check_code_screenshot}' '{check_frame}' null"
             )
             t1_stop = perf_counter()
             log.info(f"check done {t1_stop - t1_start} seconds")
@@ -186,7 +198,7 @@ async def check(check_id):
             json.dump(
                 {
                     **spec,
-                    "MAE": stderr.decode(),
+                    "MAE": stderr,
                     "created_at": now - t1_start,
                     "completed_at": now,
                 },
