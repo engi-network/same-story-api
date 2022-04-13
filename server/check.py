@@ -115,19 +115,22 @@ async def check(spec_d):
     branch = spec_d.get("branch")
     branch_cmd = f" --branch {branch}" if branch is not None else ""
     commit = spec_d.get("commit")
+    github_token = spec_d.get("github_token")
+    # TODO shouldn't really log this command
+    github_cmd = f"GITHUB_TOKEN='{github_token}' gh" if github_token else "gh"
     sync = True
     try:
         if not frame.exists():
             raise CheckError("frame", stderr=str(frame))
         if not code.exists():
             sync = False
-            await run_raise(f"gh repo clone {check_repo} {code}", e_key="clone")
+            await run_raise(f"{github_cmd} repo clone {check_repo} {code}", e_key="clone")
         with set_directory(code):
             if sync:
                 # stash any local changes, e.g. package-lock.json
                 await run_raise(f"git stash", e_key="clone")
             if branch:
-                await run_raise(f"gh repo sync{branch_cmd}", e_key="branch")
+                await run_raise(f"{github_cmd} repo sync{branch_cmd}", e_key="branch")
             if commit:
                 await run_raise(f"git checkout {commit}", e_key="commit")
             await run_raise("npm install", e_key="install")

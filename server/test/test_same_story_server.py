@@ -132,6 +132,13 @@ def success_results_no_commit_branch(success_spec):
     cleanup(success_spec)
 
 
+@pytest.fixture
+def error_results_with_github_token(success_spec):
+    success_spec["github_token"] = "nonsense"
+    yield get_results(success_spec)
+    cleanup(success_spec)
+
+
 def check_spec_in_results(spec, results):
     # check spec got copied into results
     for key, val in spec.items():
@@ -191,6 +198,10 @@ def test_should_error_on_branch_problem(error_results_branch):
 
 def test_should_error_on_repo_problem(error_results_repo):
     get_error(error_results_repo, "clone")
+
+
+def test_should_error_on_bad_github_token(error_results_with_github_token):
+    get_error(error_results_with_github_token, "clone")
 
 
 def test_should_error_on_commit_problem(error_results_commit):
