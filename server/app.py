@@ -22,11 +22,11 @@ log = setup_logging()
 async def worker(n, queue):
     while True:
         # dequeue a "work item"
-        client, check_id, receipt_handle = await queue.get()
+        client, spec_d, receipt_handle = await queue.get()
         # run the shell script to do run storybook and capture the screenshots with diffs
-        log.info(f"worker {n} got {check_id=}")
+        log.info(f"worker {n} got {spec_d=}")
         try:
-            await check(check_id)
+            await check(spec_d)
         except Exception as e:
             log.exception(e)
         # remove the message from the SQS queue
@@ -62,13 +62,11 @@ async def poll_queue():
                 # queue up the asyncio queue for the workers to process
                 for m in r.get("Messages", []):
                     msg = json.loads(m["Body"])
-                    payload = json.loads(msg["Message"])
-                    log.info(f"got {payload=}")
-                    # quote the check_id to plug the shell injection security hole
-                    check_id = quote(str(payload["check_id"]))
+                    spec_d = json.loads(msg["Message"])
+                    log.info(f"got {spec_d=}")
                     receipt_handle = m["ReceiptHandle"]
                     # if the queue is full, wait until a free slot is available
-                    await queue.put((client, check_id, receipt_handle))
+                    await queue.put((client, spec_d, receipt_handle))
 
             except KeyboardInterrupt:
                 break

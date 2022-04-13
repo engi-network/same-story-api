@@ -38,23 +38,25 @@ def exists(key_name):
     return "Contents" in r
 
 
-def get_results(spec_d):
-    check_id = spec_d["check_id"]
-    prefix = f"checks/{check_id}"
-    spec = f"{prefix}/specification.json"
-    results = f"{prefix}/report/results.json"
+def upload_frame(prefix, spec_d):
     story = spec_d["story"]
-    check_frame = f"{story}.png"
-    button = Path(f"{prefix}/frames/{check_frame}")
-
-    # upload specification.json
-    upload(spec, json.dumps(spec_d))
+    frame = f"{story}.png"
+    button = Path(f"{prefix}/frames/{frame}")
     # upload the button image (this is the check frame from Figma)
     upload_file(f"server/test/data/{button.name}", button)
+
+
+def get_results(spec_d, upload=True):
+    prefix = f"checks/{spec_d['check_id']}"
+    results = f"{prefix}/report/results.json"
+
+    if upload:
+        upload_frame(prefix, spec_d)
+
     # publish the job
     sns_client.publish(
         TopicArn=TOPIC_ARN,
-        Message=json.dumps({"check_id": check_id}),
+        Message=json.dumps(spec_d),
     )
 
     # a crude loop to poll for the results
@@ -118,8 +120,7 @@ def error_results_branch(success_spec):
 
 @pytest.fixture
 def error_results_frame(success_spec):
-    success_spec["branch"] = "nonsense"
-    yield get_results(success_spec)
+    yield get_results(success_spec, upload=False)
     cleanup(success_spec)
 
 
@@ -194,3 +195,7 @@ def test_should_error_on_repo_problem(error_results_repo):
 
 def test_should_error_on_commit_problem(error_results_commit):
     get_error(error_results_commit, "commit")
+
+
+def test_should_error_on_missing_frame(error_results_frame):
+    get_error(error_results_frame, "frame")

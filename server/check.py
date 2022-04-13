@@ -54,7 +54,7 @@ async def run(cmd):
 class CheckError(Exception):
     messages = {
         "clone": _("failed to clone GitHub repo"),
-        "frame": _("Figma frame missing"),
+        "frame": _("Figma frame missing (no such file)"),
         "branch": _("failed to sync GitHub repo, check branch"),
         "commit": _("failed to checkout commit in GitHub repo"),
         "install": _("npm install failed"),
@@ -93,34 +93,36 @@ def gettempdir():
     return Path(os.environ.get("TMPDIR", "/tmp/"))
 
 
-def get_dims(spec):
+def get_dims(spec_d):
     # somehow the screenshot ends up being 2x the dimensions given below!
-    height = int(spec.get("height", "600")) // 2
-    width = int(spec.get("width", "800")) // 2
+    height = int(spec_d.get("height", "600")) // 2
+    width = int(spec_d.get("width", "800")) // 2
     return f"{width}x{height}"
 
 
-async def check(check_id):
+async def check(spec_d):
     t1_start = perf_counter()
-    check_prefix = Path(f"same-story/checks/{check_id}")
-    check_dir = gettempdir() / check_prefix
+    prefix = Path(f"same-story/checks/{spec_d['check_id']}")
+    check_dir = gettempdir() / prefix
     check_dir.mkdir(parents=True, exist_ok=True)
-    log.info(f"{check_prefix=} {check_dir=}")
-    await run_raise(f"aws s3 cp s3://{check_prefix} {check_dir} --recursive", e_key="aws")
-    spec = json.load(open(check_dir / "specification.json"))
-    log.info(f"loaded spec {spec=}")
-    check_repo = spec["repository"]
-    check_code = check_dir / "code"
+    log.info(f"{prefix=} {check_dir=}")
+    await run_raise(f"aws s3 cp s3://{prefix} {check_dir} --recursive", e_key="aws")
+    check_repo = spec_d["repository"]
+    code = check_dir / "code"
     results = "results.json"
-    branch = spec.get("branch")
+    story = spec_d["story"]
+    frame = check_dir / f"frames/{story}.png"
+    branch = spec_d.get("branch")
     branch_cmd = f" --branch {branch}" if branch is not None else ""
-    commit = spec.get("commit")
+    commit = spec_d.get("commit")
     sync = True
     try:
-        if not check_code.exists():
+        if not frame.exists():
+            raise CheckError("frame", stderr=str(frame))
+        if not code.exists():
             sync = False
-            await run_raise(f"gh repo clone {check_repo} {check_code}", e_key="clone")
-        with set_directory(check_code):
+            await run_raise(f"gh repo clone {check_repo} {code}", e_key="clone")
+        with set_directory(code):
             if sync:
                 # stash any local changes, e.g. package-lock.json
                 await run_raise(f"git stash", e_key="clone")
@@ -134,86 +136,75 @@ async def check(check_id):
             # TODO storycap concurrency fail, hence MAX_QUEUE_MESSAGES=1
             port = get_port()
             await run_raise(
-                f"npx storycap http://localhost:{port} --viewport {get_dims(spec)} "
+                f"npx storycap http://localhost:{port} --viewport {get_dims(spec_d)} "
                 f"--serverCmd 'start-storybook -p {port}'",
                 e_key="storycap",
             )
 
             log.info("uploading code screenshots to s3")
             await run_raise(
-                f"aws s3 cp {check_code}/__screenshots__ "
-                f"s3://{check_prefix}/report/__screenshots__ --recursive",
+                f"aws s3 cp {code}/__screenshots__ "
+                f"s3://{prefix}/report/__screenshots__ --recursive",
                 e_key="aws",
             )
 
             log.info("running visual comparisons")
-            check_story = spec["story"]
-            check_component = spec["component"]
-            path = spec["path"]
-            check_frame = check_dir / f"frames/{check_story}.png"
-            check_code_screenshot = (
-                check_code / f"__screenshots__/{path}/{check_component}/{check_story}.png"
+            screenshot = (
+                code / f"__screenshots__/{spec_d['path']}/{spec_d['component']}/{story}.png"
             )
-            if not check_frame.exists():
-                raise CheckError("frame")
-            if not check_code_screenshot.exists():
-                raise CheckError("storycap")
+            if not screenshot.exists():
+                raise CheckError("storycap", stderr=str(screenshot))
 
             log.info("running regression with blue hightlight and uploading")
             blue_difference = Path("blue_difference.png")
             # compare exits with code 1 even though it seems to have run successfully
             await run(
-                f"compare '{check_code_screenshot}' '{check_frame}' "
-                f"-highlight-color blue {blue_difference}"
+                f"compare '{screenshot}' '{frame}' " f"-highlight-color blue {blue_difference}"
             )
             if not blue_difference.exists():
-                raise CheckError("comp")
+                raise CheckError("comp", stderr=str(blue_difference))
             await run_raise(
-                f"aws s3 cp {blue_difference} s3://{check_prefix}/report/{blue_difference}",
+                f"aws s3 cp {blue_difference} s3://{prefix}/report/{blue_difference}",
                 e_key="aws",
             )
 
             log.info("running regression with gray hightlight and uploading")
             gray_difference = Path("gray_difference.png")
             await run_raise(
-                f"convert '{check_code_screenshot}' -flatten -grayscale Rec709Luminance "
-                f"'{check_frame}' -flatten -grayscale Rec709Luminance "
+                f"convert '{screenshot}' -flatten -grayscale Rec709Luminance "
+                f"'{frame}' -flatten -grayscale Rec709Luminance "
                 "-clone 0-1 -compose darken -composite "
                 f"-channel RGB -combine {gray_difference}",
                 e_key="comp",
             )
             if not gray_difference.exists():
-                raise CheckError("comp")
+                raise CheckError("comp", stderr=str(gray_difference))
             await run_raise(
-                f"aws s3 cp {gray_difference} s3://{check_prefix}/report/{gray_difference}",
+                f"aws s3 cp {gray_difference} s3://{prefix}/report/{gray_difference}",
                 e_key="aws",
             )
             # compare exits with code 1 even though it seems to have run successfully
-            _, _, stderr = await run(
-                f"compare -metric MAE '{check_code_screenshot}' '{check_frame}' null"
-            )
+            _, _, stderr = await run(f"compare -metric MAE '{screenshot}' '{frame}' null")
             t1_stop = perf_counter()
             log.info(f"check done {t1_stop - t1_start} seconds")
             now = time()
             json.dump(
                 {
-                    **spec,
+                    **spec_d,
                     "MAE": stderr,
                     "created_at": now - t1_start,
                     "completed_at": now,
                 },
                 open(results, "w"),
             )
-            await run_raise(
-                f"aws s3 cp {results} s3://{check_prefix}/report/{results}", e_key="aws"
-            )
+            await run_raise(f"aws s3 cp {results} s3://{prefix}/report/{results}", e_key="aws")
     except CheckError as e:
         log.exception(e)
         results_file = check_dir / results
-        d = {**spec, **e.to_dict()}
+        d = {**spec_d, **e.to_dict()}
         log.error(f"{d=}")
         json.dump(d, open(results_file, "w"))
-        await run_raise(f"aws s3 cp {results_file} s3://{check_prefix}/report/{results}")
+        await run_raise(f"aws s3 cp {results_file} s3://{prefix}/report/{results}")
 
     return 0
 
