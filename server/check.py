@@ -2,14 +2,14 @@ import asyncio
 import gettext
 import json
 import os
+import re
 import socket
 import sys
-from ast import dump
 from asyncio.subprocess import PIPE
 from contextlib import contextmanager
 from pathlib import Path
+from shlex import quote
 from time import perf_counter, time
-from tkinter import W
 
 from helpful_scripts import setup_logging
 
@@ -34,8 +34,12 @@ def get_port():
     return sock.getsockname()[1]
 
 
-async def run(cmd):
-    log.info(cmd)
+async def run(cmd, log_cmd=None):
+    if log_cmd is None:
+        log_cmd = cmd
+    # don't log env vars
+    log_cmd = re.subn("\S+=\S+ ", "", log_cmd)[0]
+    log.info(log_cmd)
     t1_start = perf_counter()
     proc = await asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
     stdout, stderr = await proc.communicate()
@@ -47,7 +51,9 @@ async def run(cmd):
         log.info(f"[stdout]\n{stdout}")
     if stderr:
         log.info(f"[stderr]\n{stderr}")
-    log.info(f"{cmd!r} exited with code {proc.returncode} elapsed {t1_stop - t1_start} seconds")
+    log.info(
+        f"{log_cmd!r} exited with code {proc.returncode} elapsed {t1_stop - t1_start} seconds"
+    )
     return proc.returncode, stdout, stderr
 
 
@@ -81,8 +87,8 @@ class CheckError(Exception):
         }
 
 
-async def run_raise(cmd, returncode=0, e_key=None):
-    returncode_, stdout, stderr = await run(cmd)
+async def run_raise(cmd, returncode=0, e_key=None, log_cmd=None):
+    returncode_, stdout, stderr = await run(cmd, log_cmd=log_cmd)
     if returncode_ != returncode:
         raise CheckError(e_key, stdout, stderr)
     return returncode_
@@ -107,7 +113,7 @@ async def check(spec_d):
     check_dir.mkdir(parents=True, exist_ok=True)
     log.info(f"{prefix=} {check_dir=}")
     await run_raise(f"aws s3 cp s3://{prefix} {check_dir} --recursive", e_key="aws")
-    check_repo = spec_d["repository"]
+    repo = spec_d["repository"]
     code = check_dir / "code"
     results = "results.json"
     story = spec_d["story"]
@@ -115,16 +121,26 @@ async def check(spec_d):
     branch = spec_d.get("branch")
     branch_cmd = f" --branch {branch}" if branch is not None else ""
     commit = spec_d.get("commit")
-    github_token = spec_d.get("github_token")
-    # TODO shouldn't really log this command
-    github_cmd = f"GITHUB_TOKEN='{github_token}' gh" if github_token else "gh"
+    github_token = quote(spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
+    # don't ask 😆
+    github_cmd = f"GITHUB_TOKEN='{github_token}' gh"
+    github_opts = (
+        f"-- -c url.'https://{github_token}:@github.com/'.insteadOf='https://github.com/'"
+    )
+    # oh, alright then -- the -c option let's us use the GitHub personal access
+    # token as the Git credential helper
     sync = True
     try:
         if not frame.exists():
             raise CheckError("frame", stderr=str(frame))
         if not code.exists():
             sync = False
-            await run_raise(f"{github_cmd} repo clone {check_repo} {code}", e_key="clone")
+            log_cmd = f"{github_cmd} repo clone {repo} {code}"
+            await run_raise(
+                f"{log_cmd} {github_opts}",
+                e_key="clone",
+                log_cmd=log_cmd,  # don't log secrets
+            )
         with set_directory(code):
             if sync:
                 # stash any local changes, e.g. package-lock.json

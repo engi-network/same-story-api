@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-from shlex import quote
 
 from aiobotocore.session import get_session
 from dotenv import load_dotenv
@@ -23,8 +22,7 @@ async def worker(n, queue):
     while True:
         # dequeue a "work item"
         client, spec_d, receipt_handle = await queue.get()
-        # run the shell script to do run storybook and capture the screenshots with diffs
-        log.info(f"worker {n} got {spec_d=}")
+        log.debug(f"worker {n} got {spec_d=}")
         try:
             await check(spec_d)
         except Exception as e:
@@ -63,7 +61,7 @@ async def poll_queue():
                 for m in r.get("Messages", []):
                     msg = json.loads(m["Body"])
                     spec_d = json.loads(msg["Message"])
-                    log.info(f"got {spec_d=}")
+                    log.debug(f"got {spec_d=}")
                     receipt_handle = m["ReceiptHandle"]
                     # if the queue is full, wait until a free slot is available
                     await queue.put((client, spec_d, receipt_handle))
