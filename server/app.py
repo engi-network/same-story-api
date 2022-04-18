@@ -5,7 +5,7 @@ import os
 from aiobotocore.session import get_session
 from dotenv import load_dotenv
 
-from check import check
+from check import CheckRequest
 from helpful_scripts import setup_logging
 
 load_dotenv()
@@ -24,7 +24,7 @@ async def worker(n, queue):
         client, spec_d, receipt_handle = await queue.get()
         log.debug(f"worker {n} got {spec_d=}")
         try:
-            await check(spec_d)
+            await CheckRequest(spec_d).run()
         except Exception as e:
             log.exception(e)
         # remove the message from the SQS queue

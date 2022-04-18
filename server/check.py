@@ -87,6 +87,157 @@ class CheckError(Exception):
         }
 
 
+async def run_seq(funcs):
+    [await f() for f in funcs]
+
+
+class CheckRequest(object):
+    def __init__(self, spec_d):
+        self.spec_d = spec_d
+        self.prefix = Path(f"same-story/checks/{spec_d['check_id']}")
+        self.check_dir = gettempdir() / self.prefix
+        self.check_dir.mkdir(parents=True, exist_ok=True)
+
+    async def download(self):
+        await run_raise(f"aws s3 cp s3://{self.prefix} {self.check_dir} --recursive", e_key="aws")
+        self.repo = self.spec_d["repository"]
+        self.code = self.check_dir / "code"
+        self.results = "results.json"
+        self.story = self.spec_d["story"]
+        self.frame = self.check_dir / f"frames/{self.story}.png"
+        if not self.frame.exists():
+            raise CheckError("frame", stderr=str(self.frame))
+
+    async def run_git(self):
+        github_token = quote(self.spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
+        # don't ask 😆
+        self.github_cmd = f"GITHUB_TOKEN='{github_token}' gh"
+        github_opts = (
+            f"-- -c url.'https://{github_token}:@github.com/'.insteadOf='https://github.com/'"
+        )
+        # oh, alright then -- the -c option lets us use the GitHub personal access
+        # token as the Git credential helper
+        if not self.code.exists():
+            self.sync = False
+            log_cmd = f"{self.github_cmd} repo clone {self.repo} {self.code}"
+            await run_raise(
+                f"{log_cmd} {github_opts}",
+                e_key="clone",
+                log_cmd=log_cmd,  # don't log secrets
+            )
+        else:
+            self.sync = True
+
+    async def sync_repo(self):
+        branch = self.spec_d.get("branch")
+        branch_cmd = f" --branch {branch}" if branch is not None else ""
+        commit = self.spec_d.get("commit")
+        if self.sync:
+            # stash any local changes, e.g. package-lock.json
+            await run_raise(f"git stash", e_key="clone")
+        if branch:
+            await run_raise(f"{self.github_cmd} repo sync{branch_cmd}", e_key="branch")
+        if commit:
+            await run_raise(f"git checkout {commit}", e_key="commit")
+
+    async def install_packages(self):
+        await run_raise("npm install", e_key="install")
+
+    def get_dims(self):
+        height = int(self.spec_d.get("height", "600"))
+        width = int(self.spec_d.get("width", "800"))
+        return f"{width}x{height}"
+
+    async def run_storycap(self):
+        port = get_port()
+        await run_raise(
+            f"npx storycap http://localhost:{port} --viewport {self.get_dims()} "
+            f"--serverCmd 'start-storybook -p {port}'",
+            e_key="storycap",
+        )
+        self.screenshot = (
+            self.code
+            / f"__screenshots__/{self.spec_d['path']}/{self.spec_d['component']}/{self.story}.png"
+        )
+        if not self.screenshot.exists():
+            raise CheckError("storycap", stderr=str(self.screenshot))
+
+    async def run_visual_comparisons(self):
+        self.gray_difference = Path("gray_difference.png")
+        await run_raise(
+            f"convert '{self.screenshot}' -flatten -grayscale Rec709Luminance "
+            f"'{self.frame}' -flatten -grayscale Rec709Luminance "
+            "-clone 0-1 -compose darken -composite "
+            f"-channel RGB -combine {self.gray_difference}",
+            e_key="comp",
+        )
+        if not self.gray_difference.exists():
+            raise CheckError("comp", stderr=str(self.gray_difference))
+
+        self.blue_difference = Path("blue_difference.png")
+        # compare exits with code 1 even though it seems to have run successfully
+        await run(
+            f"compare '{self.screenshot}' '{self.frame}' "
+            f"-highlight-color blue {self.blue_difference}"
+        )
+        if not self.blue_difference.exists():
+            raise CheckError("comp", stderr=str(self.blue_difference))
+
+    async def run_numeric_comparisons(self):
+        # compare exits with code 1 even though it seems to have run successfully
+        _, _, self.mae = await run(f"compare -metric MAE '{self.screenshot}' '{self.frame}' null")
+
+    async def upload(self):
+        await run_raise(
+            f"aws s3 cp {self.code}/__screenshots__ "
+            f"s3://{self.prefix}/report/__screenshots__ --recursive",
+            e_key="aws",
+        )
+        for f in self.blue_difference, self.gray_difference:
+            await run_raise(
+                f"aws s3 cp {f} s3://{self.prefix}/report/{f}",
+                e_key="aws",
+            )
+        self.t1_stop = perf_counter()
+        log.info(f"check done {self.t1_stop - self.t1_start} seconds")
+        now = time()
+        json.dump(
+            {
+                **self.spec_d,
+                "MAE": self.mae,
+                "created_at": now - self.t1_start,
+                "completed_at": now,
+            },
+            open(self.results, "w"),
+        )
+        await run_raise(
+            f"aws s3 cp {self.results} s3://{self.prefix}/report/{self.results}", e_key="aws"
+        )
+
+    async def run(self):
+        try:
+            self.t1_start = perf_counter()
+            await run_seq([self.download, self.run_git])
+            with set_directory(self.code):
+                await run_seq(
+                    [
+                        self.sync_repo,
+                        self.install_packages,
+                        self.run_storycap,
+                        self.run_visual_comparisons,
+                        self.run_numeric_comparisons,
+                        self.upload,
+                    ]
+                )
+        except CheckError as e:
+            log.exception(e)
+            results_file = self.check_dir / self.results
+            d = {**self.spec_d, **e.to_dict()}
+            log.error(f"{d=}")
+            json.dump(d, open(results_file, "w"))
+            await run_raise(f"aws s3 cp {results_file} s3://{self.prefix}/report/{self.results}")
+
+
 async def run_raise(cmd, returncode=0, e_key=None, log_cmd=None):
     returncode_, stdout, stderr = await run(cmd, log_cmd=log_cmd)
     if returncode_ != returncode:
@@ -100,136 +251,13 @@ def gettempdir():
 
 
 def get_dims(spec_d):
-    # somehow the screenshot ends up being 2x the dimensions given below!
-    height = int(spec_d.get("height", "600")) // 2
-    width = int(spec_d.get("width", "800")) // 2
+    height = int(spec_d.get("height", "600"))
+    width = int(spec_d.get("width", "800"))
     return f"{width}x{height}"
 
 
-async def check(spec_d):
-    t1_start = perf_counter()
-    prefix = Path(f"same-story/checks/{spec_d['check_id']}")
-    check_dir = gettempdir() / prefix
-    check_dir.mkdir(parents=True, exist_ok=True)
-    log.info(f"{prefix=} {check_dir=}")
-    await run_raise(f"aws s3 cp s3://{prefix} {check_dir} --recursive", e_key="aws")
-    repo = spec_d["repository"]
-    code = check_dir / "code"
-    results = "results.json"
-    story = spec_d["story"]
-    frame = check_dir / f"frames/{story}.png"
-    branch = spec_d.get("branch")
-    branch_cmd = f" --branch {branch}" if branch is not None else ""
-    commit = spec_d.get("commit")
-    github_token = quote(spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
-    # don't ask 😆
-    github_cmd = f"GITHUB_TOKEN='{github_token}' gh"
-    github_opts = (
-        f"-- -c url.'https://{github_token}:@github.com/'.insteadOf='https://github.com/'"
-    )
-    # oh, alright then -- the -c option let's us use the GitHub personal access
-    # token as the Git credential helper
-    sync = True
-    try:
-        if not frame.exists():
-            raise CheckError("frame", stderr=str(frame))
-        if not code.exists():
-            sync = False
-            log_cmd = f"{github_cmd} repo clone {repo} {code}"
-            await run_raise(
-                f"{log_cmd} {github_opts}",
-                e_key="clone",
-                log_cmd=log_cmd,  # don't log secrets
-            )
-        with set_directory(code):
-            if sync:
-                # stash any local changes, e.g. package-lock.json
-                await run_raise(f"git stash", e_key="clone")
-            if branch:
-                await run_raise(f"{github_cmd} repo sync{branch_cmd}", e_key="branch")
-            if commit:
-                await run_raise(f"git checkout {commit}", e_key="commit")
-            await run_raise("npm install", e_key="install")
-
-            log.info("capturing screenshots")
-            # TODO storycap concurrency fail, hence MAX_QUEUE_MESSAGES=1
-            port = get_port()
-            await run_raise(
-                f"npx storycap http://localhost:{port} --viewport {get_dims(spec_d)} "
-                f"--serverCmd 'start-storybook -p {port}'",
-                e_key="storycap",
-            )
-
-            log.info("uploading code screenshots to s3")
-            await run_raise(
-                f"aws s3 cp {code}/__screenshots__ "
-                f"s3://{prefix}/report/__screenshots__ --recursive",
-                e_key="aws",
-            )
-
-            log.info("running visual comparisons")
-            screenshot = (
-                code / f"__screenshots__/{spec_d['path']}/{spec_d['component']}/{story}.png"
-            )
-            if not screenshot.exists():
-                raise CheckError("storycap", stderr=str(screenshot))
-
-            log.info("running regression with blue hightlight and uploading")
-            blue_difference = Path("blue_difference.png")
-            # compare exits with code 1 even though it seems to have run successfully
-            await run(
-                f"compare '{screenshot}' '{frame}' " f"-highlight-color blue {blue_difference}"
-            )
-            if not blue_difference.exists():
-                raise CheckError("comp", stderr=str(blue_difference))
-            await run_raise(
-                f"aws s3 cp {blue_difference} s3://{prefix}/report/{blue_difference}",
-                e_key="aws",
-            )
-
-            log.info("running regression with gray hightlight and uploading")
-            gray_difference = Path("gray_difference.png")
-            await run_raise(
-                f"convert '{screenshot}' -flatten -grayscale Rec709Luminance "
-                f"'{frame}' -flatten -grayscale Rec709Luminance "
-                "-clone 0-1 -compose darken -composite "
-                f"-channel RGB -combine {gray_difference}",
-                e_key="comp",
-            )
-            if not gray_difference.exists():
-                raise CheckError("comp", stderr=str(gray_difference))
-            await run_raise(
-                f"aws s3 cp {gray_difference} s3://{prefix}/report/{gray_difference}",
-                e_key="aws",
-            )
-            # compare exits with code 1 even though it seems to have run successfully
-            _, _, stderr = await run(f"compare -metric MAE '{screenshot}' '{frame}' null")
-            t1_stop = perf_counter()
-            log.info(f"check done {t1_stop - t1_start} seconds")
-            now = time()
-            json.dump(
-                {
-                    **spec_d,
-                    "MAE": stderr,
-                    "created_at": now - t1_start,
-                    "completed_at": now,
-                },
-                open(results, "w"),
-            )
-            await run_raise(f"aws s3 cp {results} s3://{prefix}/report/{results}", e_key="aws")
-    except CheckError as e:
-        log.exception(e)
-        results_file = check_dir / results
-        d = {**spec_d, **e.to_dict()}
-        log.error(f"{d=}")
-        json.dump(d, open(results_file, "w"))
-        await run_raise(f"aws s3 cp {results_file} s3://{prefix}/report/{results}")
-
-    return 0
-
-
 async def main():
-    await check(sys.argv[1])
+    await CheckRequest(sys.argv[1]).run()
 
 
 if __name__ == "__main__":
