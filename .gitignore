@@ -4,6 +4,8 @@ terraform.tfvars
 
 .vscode
 
+dist
+
 __pycache__/
 *.py[cod]
 
