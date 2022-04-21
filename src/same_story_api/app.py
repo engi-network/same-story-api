@@ -16,22 +16,35 @@ QUEUE_URL = os.environ["QUEUE_URL"]
 MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 1))
 WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 
+DEFAULT_STATUS_TOPIC_ARN = os.environ.get("DEFAULT_STATUS_TOPIC_ARN")
+
 debug = os.environ.get("DEBUG", False)
 log_level = logging.DEBUG if debug else logging.INFO
 log = setup_logging(log_level)
 
 
+async def status_callback(sns, spec_d, msg):
+    topic_arn = spec_d.get("sns_topic_arn", DEFAULT_STATUS_TOPIC_ARN)
+    if topic_arn is None:
+        return
+    log.info(f"sending status update to {topic_arn=} {msg=}")
+    await sns.publish(
+        TopicArn=topic_arn,
+        Message=json.dumps(msg),
+    )
+
+
 async def worker(n, queue):
     while True:
         # dequeue a "work item"
-        client, spec_d, receipt_handle = await queue.get()
+        sqs, sns, spec_d, receipt_handle = await queue.get()
         log.info(f"worker {n} got {spec_d=}")
         try:
-            await CheckRequest(spec_d).run()
+            await CheckRequest(spec_d, lambda msg: status_callback(sns, spec_d, msg)).run()
         except Exception as e:
             log.exception(e)
         # remove the message from the SQS queue
-        r = await client.delete_message(
+        r = await sqs.delete_message(
             QueueUrl=QUEUE_URL,
             ReceiptHandle=receipt_handle,
         )
@@ -50,12 +63,12 @@ async def poll_queue():
         task = asyncio.create_task(worker(n, queue))
         tasks.append(task)
 
-    async with session.create_client("sqs") as client:
+    async with session.create_client("sqs") as sqs, session.create_client("sns") as sns:
         while True:
             try:
                 log.info("receiving messages")
                 # grab a message from the SQS queue
-                r = await client.receive_message(
+                r = await sqs.receive_message(
                     QueueUrl=QUEUE_URL,
                     WaitTimeSeconds=WAIT_TIME,
                     MaxNumberOfMessages=MAX_QUEUE_MESSAGES,
@@ -67,7 +80,7 @@ async def poll_queue():
                     log.debug(f"got {spec_d=}")
                     receipt_handle = m["ReceiptHandle"]
                     # if the queue is full, wait until a free slot is available
-                    await queue.put((client, spec_d, receipt_handle))
+                    await queue.put((sqs, sns, spec_d, receipt_handle))
 
             except KeyboardInterrupt:
                 break

@@ -71,7 +71,10 @@ class SNSFanoutSQS(object):
             Endpoint=self.queue_arn,
             ReturnSubscriptionArn=True,
         )
-        allow_sns_to_write_to_sqs(self.topic_arn, self.queue_arn)
+        r = self.sqs.set_queue_attributes(
+            QueueUrl=self.queue_url,
+            Attributes={"Policy": allow_sns_to_write_to_sqs(self.topic_arn, self.queue_arn)},
+        )
         return self
 
     def publish(self, d):
@@ -80,16 +83,16 @@ class SNSFanoutSQS(object):
             Message=json.dumps(d),
         )
 
-    def receive(self, wait_time=20):
+    def receive(self, wait_time=5):
         r = self.sqs.receive_message(
             QueueUrl=self.queue_url,
-            # MaxNumberOfMessages=1,
+            MaxNumberOfMessages=1,
             WaitTimeSeconds=wait_time,
         )
         for msg in r.get("Messages", []):
-            yield json.loads(msg["Body"])
+            yield json.loads(json.loads(msg["Body"])["Message"])
             receipt_handle = msg["ReceiptHandle"]
-            log.info(f"{receipt_handle=}")
+            # log.info(f"{receipt_handle=}")
             self.sqs.delete_message(
                 QueueUrl=self.queue_url,
                 ReceiptHandle=receipt_handle,

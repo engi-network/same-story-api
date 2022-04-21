@@ -92,23 +92,56 @@ async def run_seq(funcs):
 
 
 class CheckRequest(object):
-    def __init__(self, spec_d):
+    STATUS_MESSAGES = [
+        _("downloading Figma check frame"),
+        _("running Git"),
+        _("installing packages"),
+        _("running storycap"),
+        _("running visual comparisons"),
+        _("running numeric comparisons"),
+        _("uploading screenshots"),
+    ]
+
+    def __init__(self, spec_d, status_callback):
         self.spec_d = spec_d
+        self.status_callack = status_callback
         self.prefix = Path(f"same-story/checks/{spec_d['check_id']}")
         self.check_dir = gettempdir() / self.prefix
         self.check_dir.mkdir(parents=True, exist_ok=True)
+        self.step = 0
+
+    async def send_status(self, error=None):
+        msg = {
+            "check_id": self.spec_d["check_id"],
+            "step": self.step,
+            "step_count": len(self.STATUS_MESSAGES),
+            "message": self.STATUS_MESSAGES[self.step],
+        }
+        if error:
+            msg["error"] = error.to_dict()
+        else:
+            self.step += 1
+        await self.status_callack(msg)
 
     async def download(self):
-        await run_raise(f"aws s3 cp s3://{self.prefix} {self.check_dir} --recursive", e_key="aws")
+        # 0
+        await self.send_status()
+        await self.run_raise(
+            f"aws s3 cp s3://{self.prefix} {self.check_dir} --recursive", e_key="aws"
+        )
         self.repo = self.spec_d["repository"]
         self.code = self.check_dir / "code"
         self.results = "results.json"
         self.story = self.spec_d["story"]
         self.frame = self.check_dir / f"frames/{self.story}.png"
-        if not self.frame.exists():
-            raise CheckError("frame", stderr=str(self.frame))
+        error = None if self.frame.exists() else CheckError("frame", stderr=str(self.frame))
+        if error:
+            await self.send_status(error=error)
+            raise error
 
     async def run_git(self):
+        # 1
+        await self.send_status()
         github_token = quote(self.spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
         # don't ask 😆
         self.github_cmd = f"GITHUB_TOKEN='{github_token}' gh"
@@ -120,7 +153,7 @@ class CheckRequest(object):
         if not self.code.exists():
             self.sync = False
             log_cmd = f"{self.github_cmd} repo clone {self.repo} {self.code}"
-            await run_raise(
+            await self.run_raise(
                 f"{log_cmd} {github_opts}",
                 e_key="clone",
                 log_cmd=log_cmd,  # don't log secrets
@@ -134,14 +167,16 @@ class CheckRequest(object):
         commit = self.spec_d.get("commit")
         if self.sync:
             # stash any local changes, e.g. package-lock.json
-            await run_raise(f"git stash", e_key="clone")
+            await self.run_raise(f"git stash", e_key="clone")
         if branch:
-            await run_raise(f"{self.github_cmd} repo sync{branch_cmd}", e_key="branch")
+            await self.run_raise(f"{self.github_cmd} repo sync{branch_cmd}", e_key="branch")
         if commit:
-            await run_raise(f"git checkout {commit}", e_key="commit")
+            await self.run_raise(f"git checkout {commit}", e_key="commit")
 
     async def install_packages(self):
-        await run_raise("npm install", e_key="install")
+        # 2
+        await self.send_status()
+        await self.run_raise("npm install", e_key="install")
 
     def get_dims(self):
         height = int(self.spec_d.get("height", "600"))
@@ -149,8 +184,10 @@ class CheckRequest(object):
         return f"{width}x{height}"
 
     async def run_storycap(self):
+        # 3
+        await self.send_status()
         port = get_port()
-        await run_raise(
+        await self.run_raise(
             f"npx storycap http://localhost:{port} --viewport {self.get_dims()} "
             f"--serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
@@ -159,20 +196,34 @@ class CheckRequest(object):
             self.code
             / f"__screenshots__/{self.spec_d['path']}/{self.spec_d['component']}/{self.story}.png"
         )
-        if not self.screenshot.exists():
-            raise CheckError("storycap", stderr=str(self.screenshot))
+        error = (
+            None
+            if self.screenshot.exists()
+            else CheckError("storycap", stderr=str(self.screenshot))
+        )
+        if error:
+            await self.send_status(error=error)
+            raise error
 
     async def run_visual_comparisons(self):
+        # 4
+        await self.send_status()
         self.gray_difference = Path("gray_difference.png")
-        await run_raise(
+        await self.run_raise(
             f"convert '{self.screenshot}' -flatten -grayscale Rec709Luminance "
             f"'{self.frame}' -flatten -grayscale Rec709Luminance "
             "-clone 0-1 -compose darken -composite "
             f"-channel RGB -combine {self.gray_difference}",
             e_key="comp",
         )
-        if not self.gray_difference.exists():
-            raise CheckError("comp", stderr=str(self.gray_difference))
+        error = (
+            None
+            if self.gray_difference.exists()
+            else CheckError("comp", stderr=str(self.gray_difference))
+        )
+        if error:
+            await self.send_status(error=error)
+            raise error
 
         self.blue_difference = Path("blue_difference.png")
         # compare exits with code 1 even though it seems to have run successfully
@@ -180,21 +231,31 @@ class CheckRequest(object):
             f"compare '{self.screenshot}' '{self.frame}' "
             f"-highlight-color blue {self.blue_difference}"
         )
-        if not self.blue_difference.exists():
-            raise CheckError("comp", stderr=str(self.blue_difference))
+        error = (
+            None
+            if self.blue_difference.exists()
+            else CheckError("comp", stderr=str(self.blue_difference))
+        )
+        if error:
+            await self.send_status(error=error)
+            raise error
 
     async def run_numeric_comparisons(self):
+        # 5
+        await self.send_status()
         # compare exits with code 1 even though it seems to have run successfully
         _, _, self.mae = await run(f"compare -metric MAE '{self.screenshot}' '{self.frame}' null")
 
     async def upload(self):
-        await run_raise(
+        # 6
+        await self.send_status()
+        await self.run_raise(
             f"aws s3 cp {self.code}/__screenshots__ "
             f"s3://{self.prefix}/report/__screenshots__ --recursive",
             e_key="aws",
         )
         for f in self.blue_difference, self.gray_difference:
-            await run_raise(
+            await self.run_raise(
                 f"aws s3 cp {f} s3://{self.prefix}/report/{f}",
                 e_key="aws",
             )
@@ -210,7 +271,7 @@ class CheckRequest(object):
             },
             open(self.results, "w"),
         )
-        await run_raise(
+        await self.run_raise(
             f"aws s3 cp {self.results} s3://{self.prefix}/report/{self.results}", e_key="aws"
         )
 
@@ -235,25 +296,22 @@ class CheckRequest(object):
             d = {**self.spec_d, **e.to_dict()}
             log.error(f"{d=}")
             json.dump(d, open(results_file, "w"))
-            await run_raise(f"aws s3 cp {results_file} s3://{self.prefix}/report/{self.results}")
+            await self.run_raise(
+                f"aws s3 cp {results_file} s3://{self.prefix}/report/{self.results}"
+            )
 
-
-async def run_raise(cmd, returncode=0, e_key=None, log_cmd=None):
-    returncode_, stdout, stderr = await run(cmd, log_cmd=log_cmd)
-    if returncode_ != returncode:
-        raise CheckError(e_key, stdout, stderr)
-    return returncode_
+    async def run_raise(self, cmd, returncode=0, e_key=None, log_cmd=None):
+        returncode_, stdout, stderr = await run(cmd, log_cmd=log_cmd)
+        error = CheckError(e_key, stdout, stderr) if returncode_ != returncode else None
+        if error:
+            self.status_callback(error=error)
+            raise error
+        return returncode_
 
 
 def gettempdir():
     # return tempfile.gettempdir()
     return Path(os.environ.get("TMPDIR", "/tmp/"))
-
-
-def get_dims(spec_d):
-    height = int(spec_d.get("height", "600"))
-    width = int(spec_d.get("width", "800"))
-    return f"{width}x{height}"
 
 
 async def main():

@@ -1,17 +1,21 @@
 import json
 import os
+import time
+from itertools import zip_longest
 from pathlib import Path
 from uuid import uuid4
 
 import boto3
 import pytest
-from same_story_api.helpful_scripts import SNSFanoutSQS
+from same_story_api.helpful_scripts import SNSFanoutSQS, setup_logging
 
 sns_client = boto3.client("sns")
 s3_client = boto3.client("s3")
 
 TOPIC_ARN = os.environ["TOPIC_ARN"]
 BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story")
+
+log = setup_logging()
 
 
 def upload(key_name, body):
@@ -47,12 +51,13 @@ def upload_frame(prefix, spec_d):
 
 
 STATUS_MESSAGES = [
-    "Downloading Figma check frame",
-    "Running Git",
-    "Installing packages",
-    "Running visual comparisons",
-    "Running numeric comparisons",
-    "Uploading screenshots",
+    "downloading Figma check frame",
+    "running Git",
+    "installing packages",
+    "running storycap",
+    "running visual comparisons",
+    "running numeric comparisons",
+    "uploading screenshots",
 ]
 
 
@@ -79,20 +84,21 @@ def get_results(spec_d, upload=True):
 
         results_d = {"spec": spec_d, "status": []}
         done = False
-        count = 7
+        count = 100
         # receive status updates, break when done, error or timeout
         while not done and count:
-            messages = sns_sqs.receive()
-            for msg in messages:
+            log.info(f"{count=}")
+            for msg in sns_sqs.receive():
+                log.info(f"received {msg=}")
                 results_d["status"].append(msg)
                 if msg["step"] == msg["step_count"] - 1 or "error" in msg:
                     done = True
             count -= 1
-
-        if exists(results):
+        if done:
+            time.sleep(5)
             results_d["results"] = json.loads(download(results))
 
-    print(f"got {results_d=}")
+    log.info(f"got {results_d=}")
     return results_d
 
 
@@ -187,7 +193,7 @@ def get_error(results, key):
 
 def cleanup(spec):
     check_id = spec["check_id"]
-    print(f"cleaning up {check_id=}")
+    log.info(f"cleaning up {check_id=}")
     prefix = f"checks/{check_id}"
     # clean up the directory in S3
     delete(prefix)
@@ -198,7 +204,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     spec_d = success_results["spec"]
     assert not "error" in results
 
-    for i, msg, status in zip(enumerate(STATUS_MESSAGES), STATUS_MESSAGES, results["status"]):
+    for (i, msg), status in zip_longest(enumerate(STATUS_MESSAGES), success_results["status"]):
         assert status["step"] == i
         assert status["step_count"] == len(STATUS_MESSAGES)
         assert status["message"] == msg
