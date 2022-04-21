@@ -12,6 +12,8 @@ python-dotenv = "*"
 [dev-packages]
 jupyterlab = "*"
 pytest = "*"
+build = "*"
+same-story-api-engi = {editable = true, path = "."}
 
 [requires]
 python_version = "3.9"

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 
 from aiobotocore.session import get_session
@@ -15,14 +16,16 @@ QUEUE_URL = os.environ["QUEUE_URL"]
 MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 1))
 WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 
-log = setup_logging()
+debug = os.environ.get("DEBUG", False)
+log_level = logging.DEBUG if debug else logging.INFO
+log = setup_logging(log_level)
 
 
 async def worker(n, queue):
     while True:
         # dequeue a "work item"
         client, spec_d, receipt_handle = await queue.get()
-        log.debug(f"worker {n} got {spec_d=}")
+        log.info(f"worker {n} got {spec_d=}")
         try:
             await CheckRequest(spec_d).run()
         except Exception as e:

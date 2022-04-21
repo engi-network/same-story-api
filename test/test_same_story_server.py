@@ -1,11 +1,11 @@
 import json
 import os
-import time
 from pathlib import Path
 from uuid import uuid4
 
 import boto3
 import pytest
+from same_story_api.helpful_scripts import SNSFanoutSQS
 
 sns_client = boto3.client("sns")
 s3_client = boto3.client("s3")
@@ -43,34 +43,54 @@ def upload_frame(prefix, spec_d):
     frame = f"{story}.png"
     button = Path(f"{prefix}/frames/{frame}")
     # upload the button image (this is the check frame from Figma)
-    upload_file(f"server/test/data/{button.name}", button)
+    upload_file(f"test/data/{button.name}", button)
+
+
+STATUS_MESSAGES = [
+    "Downloading Figma check frame",
+    "Running Git",
+    "Installing packages",
+    "Running visual comparisons",
+    "Running numeric comparisons",
+    "Uploading screenshots",
+]
 
 
 def get_results(spec_d, upload=True):
-    prefix = f"checks/{spec_d['check_id']}"
+    check_id = spec_d["check_id"]
+    prefix = f"checks/{check_id}"
     results = f"{prefix}/report/results.json"
 
-    if upload:
-        upload_frame(prefix, spec_d)
+    # create a temporary SNS -> SQS fanout to receive status updates
+    with SNSFanoutSQS(
+        f"{check_id}-same-story-test-queue", f"{check_id}-same-story-test-topic"
+    ) as sns_sqs:
+        # let the backend server know where we'd like to receive status updates
+        spec_d["sns_topic_arn"] = sns_sqs.topic_arn
 
-    # publish the job
-    sns_client.publish(
-        TopicArn=TOPIC_ARN,
-        Message=json.dumps(spec_d),
-    )
+        if upload:
+            upload_frame(prefix, spec_d)
 
-    # a crude loop to poll for the results
-    count = 16
-    results_d = {"spec": spec_d}
-    while True:
-        time.sleep(10)
-        print(f"looking for {results=}")
+        # publish the job
+        sns_client.publish(
+            TopicArn=TOPIC_ARN,
+            Message=json.dumps(spec_d),
+        )
+
+        results_d = {"spec": spec_d, "status": []}
+        done = False
+        count = 7
+        # receive status updates, break when done, error or timeout
+        while not done and count:
+            messages = sns_sqs.receive()
+            for msg in messages:
+                results_d["status"].append(msg)
+                if msg["step"] == msg["step_count"] - 1 or "error" in msg:
+                    done = True
+            count -= 1
+
         if exists(results):
             results_d["results"] = json.loads(download(results))
-            break
-
-        count -= 1
-        assert count != 0
 
     print(f"got {results_d=}")
     return results_d
@@ -91,52 +111,65 @@ def success_spec():
     }
 
 
+class Request(object):
+    def __init__(self, spec_d, upload=True):
+        self.spec_d = spec_d
+        self.upload = upload
+
+    def __enter__(self):
+        self.results = get_results(self.spec_d, upload=self.upload)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        cleanup(self.spec_d)
+
+
 @pytest.fixture
 def success_results(success_spec):
-    yield get_results(success_spec)
-    cleanup(success_spec)
+    with Request(success_spec) as req:
+        yield req.results
 
 
 @pytest.fixture
 def error_results_repo(success_spec):
     success_spec["repository"] = "nonsense"
-    yield get_results(success_spec)
-    cleanup(success_spec)
+    with Request(success_spec) as req:
+        yield req.results
 
 
 @pytest.fixture
 def error_results_commit(success_spec):
     success_spec["commit"] = "nonsense"
-    yield get_results(success_spec)
-    cleanup(success_spec)
+    with Request(success_spec) as req:
+        yield req.results
 
 
 @pytest.fixture
 def error_results_branch(success_spec):
     success_spec["branch"] = "nonsense"
-    yield get_results(success_spec)
-    cleanup(success_spec)
+    with Request(success_spec) as req:
+        yield req.results
 
 
 @pytest.fixture
 def error_results_frame(success_spec):
-    yield get_results(success_spec, upload=False)
-    cleanup(success_spec)
+    with Request(success_spec, upload=False) as req:
+        yield req.results
 
 
 @pytest.fixture
 def success_results_no_commit_branch(success_spec):
     del success_spec["branch"]
     del success_spec["commit"]
-    yield get_results(success_spec)
-    cleanup(success_spec)
+    with Request(success_spec) as req:
+        yield req.results
 
 
 @pytest.fixture
 def error_results_with_github_token(success_spec):
     success_spec["github_token"] = "nonsense"
-    yield get_results(success_spec)
-    cleanup(success_spec)
+    with Request(success_spec) as req:
+        yield req.results
 
 
 def check_spec_in_results(spec, results):
@@ -164,6 +197,11 @@ def test_should_be_able_to_successfully_run_check(success_results):
     results = success_results["results"]
     spec_d = success_results["spec"]
     assert not "error" in results
+
+    for i, msg, status in zip(enumerate(STATUS_MESSAGES), STATUS_MESSAGES, results["status"]):
+        assert status["step"] == i
+        assert status["step_count"] == len(STATUS_MESSAGES)
+        assert status["message"] == msg
 
     check_id = success_results["spec"]["check_id"]
     prefix = f"checks/{check_id}"
