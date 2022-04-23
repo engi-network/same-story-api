@@ -15,6 +15,18 @@ s3_client = boto3.client("s3")
 TOPIC_ARN = os.environ["TOPIC_ARN"]
 BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story")
 
+_ = lambda s: s
+
+STATUS_MESSAGES = [
+    _("downloaded Figma check frame"),
+    _("checked out code"),
+    _("installed packages"),
+    _("captured screenshots"),
+    _("completed visual comparisons"),
+    _("completed numeric comparisons"),
+    _("uploaded screenshots"),
+]
+
 log = setup_logging()
 
 
@@ -48,17 +60,6 @@ def upload_frame(prefix, spec_d):
     button = Path(f"{prefix}/frames/{frame}")
     # upload the button image (this is the check frame from Figma)
     upload_file(f"test/data/{button.name}", button)
-
-
-STATUS_MESSAGES = [
-    "downloading Figma check frame",
-    "running Git",
-    "installing packages",
-    "running storycap",
-    "running visual comparisons",
-    "running numeric comparisons",
-    "uploading screenshots",
-]
 
 
 def get_results(spec_d, upload=True):
@@ -95,7 +96,7 @@ def get_results(spec_d, upload=True):
                     done = True
             count -= 1
         if done:
-            time.sleep(5)
+            time.sleep(1)
             results_d["results"] = json.loads(download(results))
 
     log.info(f"got {results_d=}")
@@ -186,9 +187,19 @@ def check_spec_in_results(spec, results):
 
 def get_error(results, key):
     check_spec_in_results(results["spec"], results["results"])
+    error = results["results"]["error"]
+    for (i, msg), status in zip_longest(enumerate(STATUS_MESSAGES), results["status"]):
+        error_ = status.get("error")
+        if error_:
+            assert error_ == error
+            break
+        else:
+            assert status["step"] == i
+            assert status["step_count"] == len(STATUS_MESSAGES)
+            assert status["message"] == msg
     # key is the step where our job failed
     # stdout and stderr should tell us why
-    assert set(results["results"]["error"].keys()) >= set([key, "stdout", "stderr"])
+    assert set(error.keys()) >= set([key, "stdout", "stderr"])
 
 
 def cleanup(spec):
