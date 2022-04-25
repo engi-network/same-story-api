@@ -173,6 +173,16 @@ def success_results_no_commit_branch(success_spec):
 
 
 @pytest.fixture
+def success_results_private_repo(success_spec):
+    del success_spec["branch"]
+    del success_spec["commit"]
+    success_spec["repository"] = "cck197/figma-plugin"
+    success_spec["github_token"] = os.environ["GITHUB_TOKEN_2"]
+    with Request(success_spec) as req:
+        yield req.results
+
+
+@pytest.fixture
 def error_results_with_github_token(success_spec):
     success_spec["github_token"] = "nonsense"
     with Request(success_spec) as req:
@@ -245,6 +255,10 @@ def test_should_be_able_to_successfully_run_check_no_branch_commit(
     success_results_no_commit_branch,
 ):
     return test_should_be_able_to_successfully_run_check(success_results_no_commit_branch)
+
+
+def test_should_work_on_private_repo(success_results_private_repo):
+    return test_should_be_able_to_successfully_run_check(success_results_private_repo)
 
 
 def test_should_error_on_branch_problem(error_results_branch):
