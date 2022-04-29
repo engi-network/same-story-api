@@ -170,7 +170,15 @@ class CheckRequest(object):
             await self.run_raise(f"{self.github_cmd} repo sync{branch_cmd}", e_key="branch")
         if commit:
             await self.run_raise(f"git checkout {commit}", e_key="commit")
+        self.get_code_snippet()
         await self.send_status()
+
+    def get_code_snippet(self):
+        # TODO get code from file
+        self.code_snippet = """import { action } from '@storybook/addon-actions'
+        import { boolean, select, text } from '@storybook/addon-knobs'
+
+        import Button from './Button'"""
 
     async def install_packages(self):
         # 2
@@ -265,6 +273,7 @@ class CheckRequest(object):
                 "MAE": self.mae,
                 "created_at": now - self.t1_start,
                 "completed_at": now,
+                "code_snippet": self.code_snippet,
             },
             open(self.results, "w"),
         )

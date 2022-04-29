@@ -220,6 +220,16 @@ def cleanup(spec):
     delete(prefix)
 
 
+def check_code_snippet_in_results(results):
+    assert (
+        results["code_snippet"]
+        == """import { action } from '@storybook/addon-actions'
+        import { boolean, select, text } from '@storybook/addon-knobs'
+
+        import Button from './Button'"""
+    )
+
+
 def test_should_be_able_to_successfully_run_check(success_results):
     results = success_results["results"]
     spec_d = success_results["spec"]
@@ -249,6 +259,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     # check timestamps
     assert results["completed_at"] > results["created_at"]
     check_spec_in_results(spec_d, results)
+    check_code_snippet_in_results(results)
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(
