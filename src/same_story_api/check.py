@@ -174,11 +174,14 @@ class CheckRequest(object):
         await self.send_status()
 
     def get_code_snippet(self):
-        # TODO get code from file
-        self.code_snippet = """import { action } from '@storybook/addon-actions'
-        import { boolean, select, text } from '@storybook/addon-knobs'
-
-        import Button from './Button'"""
+        component = self.spec_d["component"]
+        path = "/".join(reversed([s.lower() for s in self.spec_d["path"].split("/")]))
+        self.code_path = Path(f"src/app/{path}/{component}/{component}.stories.tsx")
+        self.code_snippet = ""
+        if self.code_path.exists():
+            with open(self.code_path) as fp:
+                for _ in range(5):
+                    self.code_snippet += fp.readline()
 
     async def install_packages(self):
         # 2
@@ -273,6 +276,7 @@ class CheckRequest(object):
                 "MAE": self.mae,
                 "created_at": now - self.t1_start,
                 "completed_at": now,
+                "code_path": str(self.code_path),
                 "code_snippet": self.code_snippet,
             },
             open(self.results, "w"),

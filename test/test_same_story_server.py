@@ -221,12 +221,11 @@ def cleanup(spec):
 
 
 def check_code_snippet_in_results(results):
+    assert results["code_path"] == "src/app/components/global/Button/Button.stories.tsx"
     assert (
-        results["code_snippet"]
-        == """import { action } from '@storybook/addon-actions'
-        import { boolean, select, text } from '@storybook/addon-knobs'
-
-        import Button from './Button'"""
+        results["code_snippet"] == "import { action } from '@storybook/addon-actions'\n"
+        "import { boolean, select, text } from '@storybook/addon-knobs'\n\n"
+        "import Button from './Button'\n\n"
     )
 
 
