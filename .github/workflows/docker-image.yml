@@ -1,23 +1,10 @@
-- name: Build and push Docker images
-  uses: docker/build-push-action@v2.10.0
+name: Build and push Docker images
 
 on:
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-
-jobs:
-
-  build:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . -t enginetwork/same-story-api:latest
-
 
 jobs:
   docker:
