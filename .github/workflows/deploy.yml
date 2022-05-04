@@ -38,5 +38,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          tag: latest
+          commit: master
           owner: engi-network
           repo: deploy
