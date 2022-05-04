@@ -1,4 +1,4 @@
-name: ECR
+name: Deploy
 
 on:
   push:
@@ -36,6 +36,5 @@ jobs:
 
       - name: Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GITHUB_REPOSITORY: engi-network/deploy
+        with:
+          repository: engi-network/deploy
