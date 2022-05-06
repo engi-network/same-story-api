@@ -79,7 +79,7 @@ docker-compose logs -f -t
 ### Run outside Docker
 
 ```
-pipenv run python server/app.py
+pipenv run python src/same_story_api/app.py
 ```
 
 ### Run the tests

@@ -4,8 +4,16 @@ services:
   worker:
     platform: linux/arm64/v8
     build: .
-    command: python3.9 server/app.py
+    command: python3.9 src/same_story_api/app.py
     volumes:
       - .:/code
       - ${HOME}/.npm:${HOME}/.npm
+    env_file: .env
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    command: pytest
+    volumes:
+      - .:/code
     env_file: .env
