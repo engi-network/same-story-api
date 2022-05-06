@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   worker:
-    platform: linux/arm64/v8
+    # platform: linux/arm64/v8
     build: .
     command: python3.9 src/same_story_api/app.py
     volumes:
