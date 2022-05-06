@@ -8,7 +8,8 @@ services:
     volumes:
       - .:/code
       - ${HOME}/.npm:${HOME}/.npm
-    env_file: .env
+    # no .env files in CircleCI
+    # env_file: .env
   test:
     build:
       context: .
@@ -16,4 +17,4 @@ services:
     command: pytest
     volumes:
       - .:/code
-    env_file: .env
+    # env_file: .env
