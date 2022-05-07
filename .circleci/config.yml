@@ -2,6 +2,9 @@
 # See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
+orbs:
+  aws-ecr: circleci/aws-ecr@8.1.2
+
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
@@ -36,3 +39,9 @@ workflows:
           context:
             - aws
             - github
+      - aws-ecr/build-and-push-image:
+          repo: "same-story-api"
+          create-repo: true
+          tag: "latest"
+          context:
+            - aws
