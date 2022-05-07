@@ -43,6 +43,6 @@ workflows:
           repo: "same-story-api"
           create-repo: true
           tag: "latest"
-          registry-id: "${AWS_ID}"
+          registry-id: AWS_ID
           context:
             - aws
