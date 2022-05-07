@@ -19,11 +19,8 @@ jobs:
           name: "build"
           command: "docker-compose build"
       - run:
-          name: "start worker"
-          command: "docker-compose -e QUEUE_URL=$QUEUE_URL up worker"
-      - run:
-          name: "run tests"
-          command: "docker-compose -e TOPIC_ARN=$TOPIC_ARN up test"
+          name: "start worker and test"
+          command: "TOPIC_ARN=$TOPIC_ARN QUEUE_URL=$QUEUE_URL docker-compose up --exit-code-from test"
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
