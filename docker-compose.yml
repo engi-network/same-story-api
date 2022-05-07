@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.test
-    command: pytest
+    command: pytest -s -v test/test_same_story_server.py::test_should_be_able_to_successfully_run_check
     volumes:
       - .:/code
     env_file: .env
