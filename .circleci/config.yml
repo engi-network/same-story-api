@@ -40,6 +40,8 @@ workflows:
             - aws
             - github
       - aws-ecr/build-and-push-image:
+          requires:
+            - build-test
           repo: "same-story-api"
           create-repo: true
           tag: "latest"
