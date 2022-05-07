@@ -28,7 +28,7 @@ jobs:
           command: "docker-compose build"
       - run:
           name: "start worker and test"
-          command: "TOPIC_ARN=$TOPIC_ARN QUEUE_URL=$QUEUE_URL docker-compose up --exit-code-from test"
+          command: "docker-compose up --exit-code-from test"
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
@@ -43,5 +43,6 @@ workflows:
           repo: "same-story-api"
           create-repo: true
           tag: "latest"
+          registry-id: "${AWS_ID}"
           context:
             - aws
