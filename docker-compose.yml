@@ -3,20 +3,18 @@ version: "3.9"
 services:
   worker:
     build: .
-    environment:
-      - QUEUE_URL=$QUEUE_URL
     command: python3.9 src/same_story_api/app.py
     volumes:
       - .:/code
       - ${HOME}/.npm:${HOME}/.npm
+    env_file: .env
   test:
     build:
       context: .
       dockerfile: Dockerfile.test
-    environment:
-      - TOPIC_ARN=$TOPIC_ARN
     command: pytest
     volumes:
       - .:/code
+    env_file: .env
     depends_on:
       - "worker"

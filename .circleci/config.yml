@@ -16,6 +16,10 @@ jobs:
     steps:
       - checkout
       - run:
+          name: "make .env"
+          command: |
+            python3 make_env.py >.env
+      - run:
           name: "build"
           command: "docker-compose build"
       - run:
