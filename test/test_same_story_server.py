@@ -261,7 +261,6 @@ def test_should_be_able_to_successfully_run_check(success_results):
     check_code_snippet_in_results(results)
 
 
-@pytest.mark.skip(reason="currently broken")
 def test_should_be_able_to_successfully_run_check_no_branch_commit(
     success_results_no_commit_branch,
 ):

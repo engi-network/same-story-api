@@ -198,6 +198,7 @@ class CheckRequest(object):
         port = get_port()
         await self.run_raise(
             f"npx storycap http://localhost:{port} --viewport {self.get_dims()} "
+            "--serverTimeout 50000 --captureTimeout 10000 "
             f"--serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
