@@ -62,20 +62,22 @@ jobs:
 workflows:
   build-test-push-workflow:
     jobs:
-      # - build-test:
-      #     context:
-      #       - aws
-      #       - github
-      # - aws-ecr/build-and-push-image:
-      #     requires:
-      #       - build-test
-      #     repo: "same-story-api"
-      #     create-repo: true
-      #     tag: "latest"
-      #     registry-id: AWS_ID
-      #     context:
-      #       - aws
+      - build-test:
+          context:
+            - aws
+            - github
+      - aws-ecr/build-and-push-image:
+          requires:
+            - build-test
+          repo: "same-story-api"
+          create-repo: true
+          tag: "latest"
+          registry-id: AWS_ID
+          context:
+            - aws
       - deploy:
+          requires:
+            - aws-ecr/build-and-push-image
           context:
             - github
             - terraform
