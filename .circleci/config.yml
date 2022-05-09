@@ -20,31 +20,43 @@ jobs:
     steps:
       - checkout
       - run:
-          name: "make .env"
+          name: "Make .env"
           command: |
             python3 make_env.py >.env
       - run:
-          name: "build"
+          name: "Build"
           command: "docker-compose build"
       - run:
-          name: "start worker and test"
+          name: "Start worker and test"
           command: "docker-compose up --exit-code-from test"
+  deploy:
+    machine:
+      image: ubuntu-2004:202201-01
+    steps:
+      - run:
+          name: "Checkout Terraform sources"
+          command: |
+            git clone git@github.com:engi-network/deploy.git
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
   build-test-push-workflow:
     jobs:
-      - build-test:
+      # - build-test:
+      #     context:
+      #       - aws
+      #       - github
+      # - aws-ecr/build-and-push-image:
+      #     requires:
+      #       - build-test
+      #     repo: "same-story-api"
+      #     create-repo: true
+      #     tag: "latest"
+      #     registry-id: AWS_ID
+      #     context:
+      #       - aws
+      - deploy:
           context:
             - aws
             - github
-      - aws-ecr/build-and-push-image:
-          requires:
-            - build-test
-          repo: "same-story-api"
-          create-repo: true
-          tag: "latest"
-          registry-id: AWS_ID
-          context:
-            - aws
