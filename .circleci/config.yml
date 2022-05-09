@@ -6,6 +6,11 @@ orbs:
   aws-ecr: circleci/aws-ecr@8.1.2
   terraform: circleci/terraform@3.0.1
 
+parameters:
+  terraform-setup:
+    type: string
+    default: deploy/setup/same-story-api
+
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
@@ -47,8 +52,10 @@ jobs:
           arch: amd64
           os: linux
           terraform_version: 0.14.2
+      - terraform/init:
+          path: pipeline.parameters.terraform-setup
       - terraform/plan:
-          path: deploy/setup/same-story-api
+          path: pipeline.parameters.terraform-setup
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
