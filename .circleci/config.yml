@@ -4,6 +4,7 @@ version: 2.1
 
 orbs:
   aws-ecr: circleci/aws-ecr@8.1.2
+  terraform: circleci/terraform@3.0.1
 
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
@@ -30,18 +31,24 @@ jobs:
           name: "Start worker and test"
           command: "docker-compose up --exit-code-from test"
   deploy:
-    docker:
-      - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
+    machine:
+      image: ubuntu-2004:202201-01
     steps:
       - run:
           name: "Checkout Terraform sources"
           command: |
             git clone git@github.com:engi-network/deploy.git
       - run:
-          name: "Deploy"
+          name: Create .terraformrc file locally
           command: |
-            cd deploy/setup/same-story-api/
-            terraform apply --auto-approve
+            echo "credentials \"app.terraform.io\" {token =
+            \"$TERRAFORM_TOKEN\"}" > $HOME/.terraformrc
+      - terraform/install:
+          arch: amd64
+          os: linux
+          terraform_version: 0.14.2
+      - terraform/plan:
+          path: deploy/setup/same-story-api
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
@@ -63,5 +70,5 @@ workflows:
       #       - aws
       - deploy:
           context:
-            - aws
             - github
+            - terraform
