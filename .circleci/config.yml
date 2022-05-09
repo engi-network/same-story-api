@@ -53,9 +53,9 @@ jobs:
           os: linux
           terraform_version: 0.14.2
       - terraform/init:
-          path: pipeline.parameters.terraform-setup
+          path: << pipeline.parameters.terraform-setup >>
       - terraform/plan:
-          path: pipeline.parameters.terraform-setup
+          path: << pipeline.parameters.terraform-setup >>
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
