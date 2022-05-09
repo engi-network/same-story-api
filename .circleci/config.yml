@@ -30,13 +30,18 @@ jobs:
           name: "Start worker and test"
           command: "docker-compose up --exit-code-from test"
   deploy:
-    machine:
-      image: ubuntu-2004:202201-01
+    docker:
+      - image: docker.mirror.hashicorp.services/hashicorp/terraform:light
     steps:
       - run:
           name: "Checkout Terraform sources"
           command: |
             git clone git@github.com:engi-network/deploy.git
+      - run:
+          name: "Deploy"
+          command: |
+            cd deploy/setup/same-story-api/
+            terraform apply --auto-approve
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
