@@ -51,6 +51,7 @@ jobs:
       - terraform/install:
           arch: amd64
           os: linux
+          terraform_version: 1.1.9
       - terraform/init:
           path: << pipeline.parameters.terraform-setup >>
       - terraform/plan:
