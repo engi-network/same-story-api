@@ -44,12 +44,13 @@ log = setup_logging()
 class SNSFanoutSQS(object):
     """For testing only, in prod do this with Terraform"""
 
-    def __init__(self, queue_name, topic_name, visibility_timeout=180):
+    def __init__(self, queue_name, topic_name, visibility_timeout=180, persist=False):
         self.sns = boto3.client("sns")
         self.sqs = boto3.client("sqs")
         self.queue_name = queue_name
         self.topic_name = topic_name
         self.visibility_timeout = visibility_timeout
+        self.persist = persist
 
     def __enter__(self):
         log.info(f"creating {self.queue_name=}")
@@ -99,6 +100,7 @@ class SNSFanoutSQS(object):
             )
 
     def __exit__(self, exc_type, exc_value, traceback):
-        log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
-        self.sqs.delete_queue(QueueUrl=self.queue_url)
-        self.sns.delete_topic(TopicArn=self.topic_arn)
+        if not self.persist:
+            log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
+            self.sqs.delete_queue(QueueUrl=self.queue_url)
+            self.sns.delete_topic(TopicArn=self.topic_arn)
