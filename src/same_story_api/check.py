@@ -191,14 +191,18 @@ class CheckRequest(object):
     def get_dims(self):
         height = int(self.spec_d.get("height", "600"))
         width = int(self.spec_d.get("width", "800"))
-        return f"{width}x{height}"
+        return f"--viewport {width}x{height}"
+
+    def get_timeout(self):
+        server_timeout = int(self.spec_d.get("server_timeout", 50_000))
+        capture_timeout = int(self.spec_d.get("capture_timeout", 10_000))
+        return f"--serverTimeout {server_timeout} --captureTimeout {capture_timeout} "
 
     async def run_storycap(self):
         # 3
         port = get_port()
         await self.run_raise(
-            f"npx storycap http://localhost:{port} --viewport {self.get_dims()} "
-            "--serverTimeout 50000 --captureTimeout 10000 "
+            f"npx storycap http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
             f"--serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )

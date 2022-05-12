@@ -11,6 +11,9 @@ __pycache__/
 .DS_Store
 build
 
+node_modules
+package-lock.json
+
 Pipfile.lock
 
 .ipynb_checkpoints
