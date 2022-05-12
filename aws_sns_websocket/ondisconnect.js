@@ -1,9 +1,9 @@
-'use strict';
+"use strict";
 
-const AWS = require('aws-sdk');
+const AWS = require("aws-sdk");
 
 const docClient = new AWS.DynamoDB.DocumentClient({
-    apiVersion: '2012-08-10'
+    apiVersion: "2012-08-10"
 });
 
 exports.handler = async (event, context) => {
@@ -23,13 +23,13 @@ exports.handler = async (event, context) => {
         const data = await docClient.delete(params).promise();
         return {
             statusCode: 200,
-            body: ''
+            body: ""
         };
     }
     catch (e) {
         return {
             statusCode: 500,
-            body: ''
+            body: ""
         };
     }
 };
