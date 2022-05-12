@@ -7,9 +7,11 @@ const docClient = new AWS.DynamoDB.DocumentClient({
 });
 
 exports.handler = async (event, context) => {
-
+    console.log(JSON.stringify(event, null, 2));
+    console.log(JSON.stringify(context, null, 2));
     const connectionId = event.requestContext.connectionId;
-    const topic = JSON.parse(event.body).topic;
+
+    console.log(`connectionId: ${connectionId}`);
 
     const {
         TABLE_NAME
@@ -19,7 +21,6 @@ exports.handler = async (event, context) => {
         TableName: TABLE_NAME,
         Item: {
             'connectionId': connectionId,
-            'topic': topic
         },
         ReturnValues: 'NONE'
     };
@@ -27,6 +28,6 @@ exports.handler = async (event, context) => {
     const data = await docClient.put(params).promise();
     return {
         statusCode: 200,
-        body: "Subscribed for: " + event
+        body: "Subscribed for: " + connectionId
     };
 };

@@ -7,7 +7,7 @@ const docClient = new AWS.DynamoDB.DocumentClient({
 });
 
 exports.handler = async (event, context) => {
-
+    const connectionId = event.requestContext.connectionId;
     const {
         TABLE_NAME
     } = process.env;

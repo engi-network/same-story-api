@@ -15,15 +15,10 @@ exports.handler = async (event, context) => {
 
     let message = JSON.parse(event.Records[0].Sns.Message);
 
-    const topic = message.topic;
     const postData = message.data;
     let connectionData = await docClient.scan({
         TableName: TABLE_NAME,
         ProjectionExpression: "connectionId",
-        FilterExpression: "topic = :topic",
-        ExpressionAttributeValues: {
-            ":topic": topic
-        }
     }).promise();
 
     const apigwManagementApi = new AWS.ApiGatewayManagementApi({
@@ -44,6 +39,6 @@ exports.handler = async (event, context) => {
 
     return {
         statusCode: 200,
-        body: 'Message Notified.'
+        body: 'Message notified'
     };
 };
