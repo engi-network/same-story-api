@@ -10,7 +10,7 @@ RUN apt-add-repository https://cli.github.com/packages
 RUN apt-get -y update
 RUN apt-get -yq install jq openssh-client gh imagemagick curl unzip 
 
-RUN curl -fsSL https://deb.nodesource.com/setup_17.x | bash -
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
 RUN apt-get install -y nodejs
 
 RUN apt-get install -yq chromium awscli
