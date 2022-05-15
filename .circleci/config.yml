@@ -39,6 +39,7 @@ jobs:
     machine:
       image: ubuntu-2004:202201-01
     steps:
+      - checkout
       - run:
           name: "Checkout Terraform sources"
           command: |
