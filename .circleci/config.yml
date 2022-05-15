@@ -44,6 +44,10 @@ jobs:
           command: |
             git clone git@github.com:engi-network/deploy.git
       - run:
+          name: "Link SNS -> WebSocket Lambda function sources"
+          command: |
+            ln -s ../../../aws_sns_websocket << pipeline.parameters.terraform-setup >>
+      - run:
           name: Create .terraformrc file locally
           command: |
             echo "credentials \"app.terraform.io\" {token =
