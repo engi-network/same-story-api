@@ -2,6 +2,10 @@
 # See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
+# build the Docker image and run the tests
+# if all the tests pass, push the image to ECR
+# then invoke Terraform Cloud to deploy the new image
+
 orbs:
   aws-ecr: circleci/aws-ecr@8.1.2
   terraform: circleci/terraform@3.0.1

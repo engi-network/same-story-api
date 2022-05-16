@@ -141,3 +141,12 @@ const run = async () => {
 };
 run();
 ```
+
+## CI/CD
+
+[CircleCI](https://app.circleci.com/pipelines/github/engi-network/same-story-api) is invoked each time you push to GitHub.
+
+Currently there are no filters applied, but eventually we'll want to make it so
+changes are only pushed to prod if a tag is applied.
+
+See the file `config.yml` in the directory `.circleci`
