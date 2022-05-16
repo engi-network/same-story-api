@@ -93,6 +93,7 @@ async def run_seq(funcs):
 
 class CheckRequest(object):
     STATUS_MESSAGES = [
+        _("job started"),
         _("downloaded Figma check frame"),
         _("checked out code"),
         _("installed packages"),
@@ -124,7 +125,6 @@ class CheckRequest(object):
         await self.status_callack(msg)
 
     async def download(self):
-        # 0
         await self.run_raise(
             f"aws s3 cp s3://{self.prefix} {self.check_dir} --recursive", e_key="aws"
         )
@@ -159,7 +159,6 @@ class CheckRequest(object):
             self.sync = True
 
     async def sync_repo(self):
-        # 1
         branch = self.spec_d.get("branch")
         branch_cmd = f" --branch {branch}" if branch is not None else ""
         commit = self.spec_d.get("commit")
@@ -184,7 +183,6 @@ class CheckRequest(object):
                     self.code_snippet += fp.readline()
 
     async def install_packages(self):
-        # 2
         await self.run_raise("npm install", e_key="install")
         await self.send_status()
 
@@ -199,7 +197,6 @@ class CheckRequest(object):
         return f"--serverTimeout {server_timeout} --captureTimeout {capture_timeout} "
 
     async def run_storycap(self):
-        # 3
         port = get_port()
         await self.run_raise(
             f"npx storycap http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
@@ -220,7 +217,6 @@ class CheckRequest(object):
             raise error
 
     async def run_visual_comparisons(self):
-        # 4
         self.gray_difference = Path("gray_difference.png")
         await self.run_raise(
             f"convert '{self.screenshot}' -flatten -grayscale Rec709Luminance "
@@ -255,13 +251,11 @@ class CheckRequest(object):
         await self.send_status()
 
     async def run_numeric_comparisons(self):
-        # 5
         # compare exits with code 1 even though it seems to have run successfully
         _, _, self.mae = await run(f"compare -metric MAE '{self.screenshot}' '{self.frame}' null")
         await self.send_status()
 
     async def upload(self):
-        # 6
         await self.run_raise(
             f"aws s3 cp {self.code}/__screenshots__ "
             f"s3://{self.prefix}/report/__screenshots__ --recursive",
@@ -294,7 +288,7 @@ class CheckRequest(object):
     async def run(self):
         try:
             self.t1_start = perf_counter()
-            await run_seq([self.download, self.run_git])
+            await run_seq([self.send_status, self.download, self.run_git])
             with set_directory(self.code):
                 await run_seq(
                     [

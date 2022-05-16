@@ -18,6 +18,7 @@ BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story")
 _ = lambda s: s
 
 STATUS_MESSAGES = [
+    _("job started"),
     _("downloaded Figma check frame"),
     _("checked out code"),
     _("installed packages"),
