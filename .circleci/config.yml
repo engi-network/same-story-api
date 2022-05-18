@@ -15,6 +15,34 @@ parameters:
     type: string
     default: deploy/setup/same-story-api
 
+commands:
+  terraform-deploy:
+    steps:
+      - run:
+          name: "Checkout Terraform sources"
+          command: |
+            git clone git@github.com:engi-network/deploy.git
+      - run:
+          name: "Display TF_WORKSPACE"
+          command: |
+            echo TF_WORKSPACE=$TF_WORKSPACE
+      - run:
+          name: Create .terraformrc file locally
+          command: |
+            echo "credentials \"app.terraform.io\" {token =
+            \"$TERRAFORM_TOKEN\"}" > $HOME/.terraformrc
+      - terraform/install:
+          arch: amd64
+          os: linux
+          terraform_version: 1.1.9
+      - terraform/init:
+          path: << pipeline.parameters.terraform-setup >>
+      - run:
+          # the terraform/apply command built into the official orb unsets TF_WORKSPACE that won't work here
+          name: "terraform apply"
+          command: |
+            terraform -chdir="<< pipeline.parameters.terraform-setup >>" apply -auto-approve
+
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
@@ -39,32 +67,20 @@ jobs:
       - run:
           name: "Start worker and test"
           command: "docker-compose up --exit-code-from test"
-  deploy:
+  deploy-staging:
     machine:
       image: ubuntu-2004:202201-01
+    environment:
+      TF_WORKSPACE: "same-story-api-staging"
     steps:
-      - checkout
-      - run:
-          name: "Checkout Terraform sources"
-          command: |
-            git clone git@github.com:engi-network/deploy.git
-      - run:
-          name: "Link SNS -> WebSocket Lambda function sources"
-          command: |
-            ln -s ../../../aws_sns_websocket << pipeline.parameters.terraform-setup >>
-      - run:
-          name: Create .terraformrc file locally
-          command: |
-            echo "credentials \"app.terraform.io\" {token =
-            \"$TERRAFORM_TOKEN\"}" > $HOME/.terraformrc
-      - terraform/install:
-          arch: amd64
-          os: linux
-          terraform_version: 1.1.9
-      - terraform/init:
-          path: << pipeline.parameters.terraform-setup >>
-      - terraform/apply:
-          path: << pipeline.parameters.terraform-setup >>
+      - terraform-deploy
+  deploy-production:
+    machine:
+      image: ubuntu-2004:202201-01
+    environment:
+      TF_WORKSPACE: "same-story-api-production"
+    steps:
+      - terraform-deploy
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
@@ -79,14 +95,32 @@ workflows:
           requires:
             - build-test
           repo: "same-story-api"
+          name: "build-and-push-staging"
           create-repo: true
-          tag: "latest"
+          tag: latest
           registry-id: AWS_ID
           context:
             - aws
-      - deploy:
-          requires:
-            - aws-ecr/build-and-push-image
+      - aws-ecr/build-and-push-image:
+          # filters:
+          #   tags:
+          #     only: /^v.*/
+          name: "build-and-push-production"
+          repo: "same-story-api-production"
+          create-repo: true
+          tag: latest
+          registry-id: AWS_ID
           context:
-            - github
-            - terraform
+            - aws
+      # - deploy-staging:
+      #     requires:
+      #       - build-and-push-staging
+      #     context:
+      #       - github
+      #       - terraform
+      # - deploy-production:
+      #     requires:
+      #       - build-and-push-production
+      #     context:
+      #       - github
+      #       - terraform
