@@ -114,12 +114,12 @@ workflows:
           registry-id: AWS_ID
           context:
             - aws
-      # - deploy-staging:
-      #     requires:
-      #       - build-and-push-staging
-      #     context:
-      #       - github
-      #       - terraform
+      - deploy-staging:
+          requires:
+            - build-and-push-staging
+          context:
+            - github
+            - terraform
       # - deploy-production:
       #     requires:
       #       - build-and-push-production
