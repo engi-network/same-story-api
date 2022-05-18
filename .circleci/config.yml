@@ -94,7 +94,7 @@ workflows:
       - aws-ecr/build-and-push-image:
           requires:
             - build-test
-          repo: "same-story-api"
+          repo: "same-story-api-staging"
           name: "build-and-push-staging"
           create-repo: true
           tag: latest
