@@ -125,9 +125,9 @@ workflows:
           context:
             - github
             - terraform
-      # - deploy-production:
-      #     requires:
-      #       - build-and-push-production
-      #     context:
-      #       - github
-      #       - terraform
+      - deploy-production:
+          requires:
+            - build-and-push-production
+          context:
+            - github
+            - terraform
