@@ -18,6 +18,7 @@ parameters:
 commands:
   terraform-deploy:
     steps:
+      - checkout
       - run:
           name: "Checkout Terraform sources"
           command: |
