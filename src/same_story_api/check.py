@@ -266,15 +266,14 @@ class CheckRequest(object):
                 f"aws s3 cp {f} s3://{self.prefix}/report/{f}",
                 e_key="aws",
             )
-        self.t1_stop = perf_counter()
-        log.info(f"check done {self.t1_stop - self.t1_start} seconds")
-        now = time()
+        self.stop = time()
+        log.info(f"check done {self.stop - self.start} seconds")
         json.dump(
             {
                 **self.spec_d,
                 "MAE": self.mae,
-                "created_at": now - self.t1_start,
-                "completed_at": now,
+                "created_at": self.start,
+                "completed_at": self.stop,
                 "code_path": str(self.code_path),
                 "code_snippet": self.code_snippet,
             },
@@ -287,7 +286,7 @@ class CheckRequest(object):
 
     async def run(self):
         try:
-            self.t1_start = perf_counter()
+            self.start = time()
             await run_seq([self.send_status, self.download, self.run_git])
             with set_directory(self.code):
                 await run_seq(

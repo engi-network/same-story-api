@@ -257,7 +257,8 @@ def test_should_be_able_to_successfully_run_check(success_results):
     mae = float(results["MAE"].split()[0])
     assert mae < 50.0
     # check timestamps
-    assert results["completed_at"] > results["created_at"]
+    duration = results["completed_at"] - results["created_at"]
+    assert duration > 0 and duration < 200
     check_spec_in_results(spec_d, results)
     check_code_snippet_in_results(results)
 
