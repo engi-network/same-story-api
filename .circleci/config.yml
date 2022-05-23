@@ -107,9 +107,9 @@ workflows:
           context:
             - aws
       - aws-ecr/build-and-push-image:
-          # filters:
-          #   tags:
-          #     only: /^v.*/
+          filters:
+            tags:
+              only: /^v.*/
           requires:
             - build-test
           name: "build-and-push-production"
@@ -126,6 +126,9 @@ workflows:
             - github
             - terraform
       - deploy-production:
+          filters:
+            tags:
+              only: /^v.*/
           requires:
             - build-and-push-production
           context:
