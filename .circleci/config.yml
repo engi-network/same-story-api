@@ -111,6 +111,8 @@ workflows:
             &filters-production # this yaml anchor is setting these values to filters-production
             tags:
               only: /^v.*/
+            branches:
+              ignore: /.*/
           requires:
             - build-test
           name: "build-and-push-production"
