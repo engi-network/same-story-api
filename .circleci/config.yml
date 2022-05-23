@@ -113,8 +113,6 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-          requires:
-            - build-test
           name: "build-and-push-production"
           repo: "same-story-api-production"
           create-repo: true
