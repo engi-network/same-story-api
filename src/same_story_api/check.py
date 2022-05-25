@@ -10,6 +10,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from shlex import quote
 from time import perf_counter, time
+from urllib.parse import quote
+
+import boto3
+
+s3_client = boto3.client("s3")
 
 from helpful_scripts import setup_logging
 
@@ -32,6 +37,9 @@ def get_port():
     sock = socket.socket()
     sock.bind(("", 0))
     return sock.getsockname()[1]
+
+
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story-api-dev")
 
 
 async def run(cmd, log_cmd=None):
@@ -104,12 +112,16 @@ class CheckRequest(object):
     ]
 
     def __init__(self, spec_d, status_callback):
+        log.info(f"{BUCKET_NAME=}")
         self.spec_d = spec_d
         self.status_callack = status_callback
-        self.prefix = Path(f"same-story/checks/{spec_d['check_id']}")
+        self.prefix = Path(f"{BUCKET_NAME}/checks/{spec_d['check_id']}")
         self.check_dir = gettempdir() / self.prefix
         self.check_dir.mkdir(parents=True, exist_ok=True)
         self.step = 0
+
+    def get_url(self, path_quoted):
+        return f"{s3_client.meta.endpoint_url}/{self.prefix}/report/{path_quoted}"
 
     async def send_status(self, error=None):
         msg = {
@@ -196,6 +208,10 @@ class CheckRequest(object):
         capture_timeout = int(self.spec_d.get("capture_timeout", 10_000))
         return f"--serverTimeout {server_timeout} --captureTimeout {capture_timeout} "
 
+    def get_screenshot(self, quote=quote):
+        story = quote(self.story)
+        return f"__screenshots__/{self.spec_d['path']}/{self.spec_d['component']}/{story}.png"
+
     async def run_storycap(self):
         port = get_port()
         await self.run_raise(
@@ -203,10 +219,7 @@ class CheckRequest(object):
             f"--serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
-        self.screenshot = (
-            self.code
-            / f"__screenshots__/{self.spec_d['path']}/{self.spec_d['component']}/{self.story}.png"
-        )
+        self.screenshot = self.code / self.get_screenshot(quote=lambda x: x)
         error = (
             None
             if self.screenshot.exists()
@@ -256,14 +269,18 @@ class CheckRequest(object):
         await self.send_status()
 
     async def upload(self):
+        extra_args = "--acl public-read"
+        urls = {"url_screenshot": self.get_url(self.get_screenshot())}
         await self.run_raise(
             f"aws s3 cp {self.code}/__screenshots__ "
-            f"s3://{self.prefix}/report/__screenshots__ --recursive",
+            f"s3://{self.prefix}/report/__screenshots__ --recursive {extra_args}",
             e_key="aws",
         )
         for f in self.blue_difference, self.gray_difference:
+            key = str(f).split(".")[0]
+            urls[f"url_{key}"] = self.get_url(f)
             await self.run_raise(
-                f"aws s3 cp {f} s3://{self.prefix}/report/{f}",
+                f"aws s3 cp {f} s3://{self.prefix}/report/{f} {extra_args}",
                 e_key="aws",
             )
         self.stop = time()
@@ -271,6 +288,7 @@ class CheckRequest(object):
         json.dump(
             {
                 **self.spec_d,
+                **urls,
                 "MAE": self.mae,
                 "created_at": self.start,
                 "completed_at": self.stop,

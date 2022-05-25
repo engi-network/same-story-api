@@ -7,13 +7,14 @@ from uuid import uuid4
 
 import boto3
 import pytest
+import requests
 from same_story_api.helpful_scripts import SNSFanoutSQS, setup_logging
 
 sns_client = boto3.client("sns")
 s3_client = boto3.client("s3")
 
 TOPIC_ARN = os.environ["TOPIC_ARN"]
-BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story")
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story-api-dev")
 
 _ = lambda s: s
 
@@ -29,6 +30,10 @@ STATUS_MESSAGES = [
 ]
 
 log = setup_logging()
+
+
+def check_url(url):
+    assert requests.get(url).status_code == 200
 
 
 def upload(key_name, body):
@@ -261,6 +266,8 @@ def test_should_be_able_to_successfully_run_check(success_results):
     assert duration > 0 and duration < 200
     check_spec_in_results(spec_d, results)
     check_code_snippet_in_results(results)
+    for key in ("gray_difference", "blue_difference", "screenshot"):
+        check_url(results[f"url_{key}"])
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(
