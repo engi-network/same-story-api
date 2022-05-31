@@ -5,16 +5,18 @@ services:
     build: .
     command: python3.9 src/same_story_api/app.py
     volumes:
-      - .:/code
+      # yaml anchor
+      &volumes
       - ${HOME}/.npm:${HOME}/.npm
+      - .:/code
+      - /tmp/same-story-api:/var/same-story-api
     env_file: .env
   test:
     build:
       context: .
       dockerfile: Dockerfile.test
     command: pytest
-    volumes:
-      - .:/code
+    volumes: *volumes
     env_file: .env
     depends_on:
       - "worker"
