@@ -302,10 +302,13 @@ class CheckRequest(object):
         )
         await self.send_status()
 
+    async def df(self):
+        await self.run_raise(f"df -h {gettempdir()}")
+
     async def run(self):
         try:
             self.start = time()
-            await run_seq([self.send_status, self.download, self.run_git])
+            await run_seq([self.df, self.send_status, self.download, self.run_git])
             with set_directory(self.code):
                 await run_seq(
                     [
