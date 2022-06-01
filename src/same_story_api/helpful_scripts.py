@@ -1,5 +1,6 @@
 import json
 import logging
+from inspect import Attribute
 
 import boto3
 import coloredlogs
@@ -16,15 +17,35 @@ def setup_logging(log_level=logging.INFO):
     return logger
 
 
+def allow_all_to_publish_to_sns(topic_arn):
+    return """{{
+        "Id": "Policy1654105353800",
+        "Version": "2012-10-17",
+        "Statement": [
+            {{
+            "Sid": "Stmt1654105351953",
+            "Action": [
+                "sns:Publish"
+            ],
+            "Effect": "Allow",
+            "Resource": "{}",
+            "Principal": "*"
+            }}
+        ]
+        }}""".format(
+        topic_arn
+    )
+
+
 def allow_sns_to_write_to_sqs(topic_arn, queue_arn):
     return """{{
         "Version":"2012-10-17",
         "Statement":[
             {{
-            "Sid":"MyPolicy",
-            "Effect":"Allow",
-            "Principal" : {{"AWS" : "*"}},
-            "Action":"SQS:SendMessage",
+            "Sid": "MyPolicy",
+            "Effect": "Allow",
+            "Principal": {{"AWS" : "*"}},
+            "Action": "SQS:SendMessage",
             "Resource": "{}",
             "Condition":{{
                 "ArnEquals":{{
@@ -71,6 +92,11 @@ class SNSFanoutSQS(object):
             Protocol="sqs",
             Endpoint=self.queue_arn,
             ReturnSubscriptionArn=True,
+        )
+        r = self.sns.set_topic_attributes(
+            TopicArn=self.topic_arn,
+            AttributeName="Policy",
+            AttributeValue=allow_all_to_publish_to_sns(self.topic_arn),
         )
         r = self.sqs.set_queue_attributes(
             QueueUrl=self.queue_url,
