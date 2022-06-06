@@ -9,7 +9,7 @@ services:
       &volumes
       - ${HOME}/.npm:${HOME}/.npm
       - .:/code
-      - /tmp/same-story-api:/var/same-story-api
+      - /run/same-story-api:/run/same-story-api
     env_file: .env
   test:
     build:
