@@ -3,6 +3,7 @@ import gettext
 import json
 import os
 import re
+import shutil
 import socket
 import sys
 from asyncio.subprocess import PIPE
@@ -31,6 +32,14 @@ def set_directory(path):
         yield
     finally:
         os.chdir(origin)
+
+
+@contextmanager
+def cleanup(path):
+    try:
+        yield
+    finally:
+        shutil.rmtree(path)
 
 
 def get_port():
@@ -142,6 +151,7 @@ class CheckRequest(object):
         )
         self.repo = self.spec_d["repository"]
         self.code = self.check_dir / "code"
+        self.node_modules = self.code / "node_modules"
         self.results = "results.json"
         self.story = self.spec_d["story"]
         self.frame = self.check_dir / f"frames/{self.story}.png"
@@ -310,16 +320,18 @@ class CheckRequest(object):
             self.start = time()
             await run_seq([self.df, self.send_status, self.download, self.run_git])
             with set_directory(self.code):
-                await run_seq(
-                    [
-                        self.sync_repo,
-                        self.install_packages,
-                        self.run_storycap,
-                        self.run_visual_comparisons,
-                        self.run_numeric_comparisons,
-                        self.upload,
-                    ]
-                )
+                # delete the node_modules directory; it's too big to persist
+                with cleanup(self.node_modules):
+                    await run_seq(
+                        [
+                            self.sync_repo,
+                            self.install_packages,
+                            self.run_storycap,
+                            self.run_visual_comparisons,
+                            self.run_numeric_comparisons,
+                            self.upload,
+                        ]
+                    )
         except CheckError as e:
             log.exception(e)
             results_file = self.check_dir / self.results
