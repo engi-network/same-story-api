@@ -37,13 +37,22 @@ exports.handler = async (event, context) => {
         endpoint: CALL_BACK_URL
     });
 
+    const msg = " sending status update via WebSocket";
     const postCalls = connectionData.Items.map(async ({
         connectionId
     }) => {
-        await apigwManagementApi.postToConnection({
+        apigwManagementApi.postToConnection({
             ConnectionId: connectionId,
             Data: event.Records[0].Sns.Message
-        }).promise();
+        }, function (err, data) {
+            if (err) { // an error occurred
+                console.log(`error ${msg}`)
+                console.log(err, err.stack);
+            }
+            else { // successful response
+                console.log(`success ${msg}`)
+            }
+        });
     });
 
     await Promise.all(postCalls);

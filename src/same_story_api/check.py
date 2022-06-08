@@ -40,7 +40,8 @@ def cleanup(path):
         yield
     finally:
         if path.exists():
-            shutil.rmtree(path)
+            pass
+            # shutil.rmtree(path)
 
 
 def get_port():
