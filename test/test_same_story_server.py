@@ -3,13 +3,7 @@ from itertools import zip_longest
 from uuid import uuid4
 
 import pytest
-from same_story_api.helpful_scripts import (
-    check_url,
-    delete,
-    exists,
-    get_results,
-    setup_logging,
-)
+from same_story_api.helpful_scripts import Client, check_url, setup_env, setup_logging
 
 _ = lambda s: s
 
@@ -25,6 +19,10 @@ STATUS_MESSAGES = [
 ]
 
 log = setup_logging()
+
+setup_env()
+
+client = Client()
 
 
 @pytest.fixture
@@ -48,11 +46,15 @@ class Request(object):
         self.upload = upload
 
     def __enter__(self):
-        self.results = get_results(self.spec_d, upload=self.upload)
+        self.results = client.get_results(self.spec_d, upload=self.upload)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        cleanup(self.spec_d)
+        check_id = self.spec_d["check_id"]
+        log.info(f"cleaning up {check_id=}")
+        prefix = f"checks/{check_id}"
+        # clean up the directory in S3
+        client.delete(prefix)
 
 
 @pytest.fixture
@@ -136,14 +138,6 @@ def get_error(results, key):
     assert set(error.keys()) >= set([key, "stdout", "stderr"])
 
 
-def cleanup(spec):
-    check_id = spec["check_id"]
-    log.info(f"cleaning up {check_id=}")
-    prefix = f"checks/{check_id}"
-    # clean up the directory in S3
-    delete(prefix)
-
-
 def check_code_snippet_in_results(results):
     assert results["code_path"] == "src/app/components/global/Button/Button.stories.tsx"
     assert (
@@ -170,10 +164,10 @@ def test_should_be_able_to_successfully_run_check(success_results):
     button = f"{prefix}/report/__screenshots__/{spec_d['path']}/{spec_d['component']}/{spec_d['story']}.png"
 
     # check for the screenshot captured by storycap
-    assert exists(button)
+    assert client.exists(button)
     # check for the output comparison images in S3
-    assert exists(gray_difference)
-    assert exists(blue_difference)
+    assert client.exists(gray_difference)
+    assert client.exists(blue_difference)
 
     # check for the objective visual difference between the check frame and the
     # screenshot captured by storycap

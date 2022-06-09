@@ -1,7 +1,10 @@
 import json
 import logging
 import os
+import shutil
+import socket
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import boto3
@@ -18,6 +21,68 @@ def setup_logging(log_level=logging.INFO):
     coloredlogs.install(level=log_level, fmt=fmt, logger=logger)
 
     return logger
+
+
+log = setup_logging()
+
+sns_client = boto3.client("sns")
+sqs_client = boto3.client("sqs")
+s3_client = boto3.client("s3")
+sts_client = boto3.client("sts")
+
+for service in ["sns", "sqs", "s3", "sts"]:
+    globals()[service] = boto3.client(service)
+
+
+def setup_env(env=None, region=None):
+    """env is one of dev, staging, production"""
+    if region is None:
+        region = boto3.session.Session().region_name
+    if env is None:
+        env = os.environ.get("ENV", "dev")
+    name = f"same-story-api-{env}"
+    account = sts_client.get_caller_identity()["Account"]
+    sns_topic = f"arn:aws:sns:{region}:{account}:{name}"
+    # a place to submit job requests
+    os.environ["TOPIC_ARN"] = sns_topic
+    log.info(f"{os.environ['TOPIC_ARN']=}")
+    # the S3 bucket to store the input image and output screenshots and results
+    os.environ["BUCKET_NAME"] = name
+    log.info(f"{os.environ['BUCKET_NAME']=}")
+    # a place for the backend server to dequeue job requests
+    os.environ["QUEUE_URL"] = f"{sqs_client.meta._endpoint_url}/{account}/{name}"
+    log.info(f"{os.environ['QUEUE_URL']=}")
+    os.environ["DEFAULT_STATUS_TOPIC_ARN"] = f"{sns_topic}-status"
+    log.info(f"{os.environ['DEFAULT_STATUS_TOPIC_ARN']=}")
+
+
+@contextmanager
+def set_directory(path):
+    origin = Path().absolute()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(origin)
+
+
+@contextmanager
+def cleanup_directory(path):
+    try:
+        yield
+    finally:
+        if path.exists():
+            shutil.rmtree(path)
+
+
+def get_port():
+    sock = socket.socket()
+    sock.bind(("", 0))
+    return sock.getsockname()[1]
+
+
+def get_s3_url(suffix):
+    return f"{s3_client.meta.endpoint_url}/{suffix}"
 
 
 def allow_all_to_publish_to_sns(topic_arn):
@@ -62,21 +127,12 @@ def allow_sns_to_write_to_sqs(topic_arn, queue_arn):
     )
 
 
-log = setup_logging()
-
-sns_client = boto3.client("sns")
-s3_client = boto3.client("s3")
-
-TOPIC_ARN = os.environ["TOPIC_ARN"]
-BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story-api-dev")
-
-
 class SNSFanoutSQS(object):
     """For testing only, in prod do this with Terraform"""
 
     def __init__(self, queue_name, topic_name, visibility_timeout=180, persist=False):
-        self.sns = boto3.client("sns")
-        self.sqs = boto3.client("sqs")
+        self.sns = sns_client
+        self.sqs = sqs_client
         self.queue_name = queue_name
         self.topic_name = topic_name
         self.visibility_timeout = visibility_timeout
@@ -145,74 +201,76 @@ def check_url(url):
     assert requests.get(url).status_code == 200
 
 
-def upload(key_name, body):
-    return s3_client.put_object(Body=body, Bucket=BUCKET_NAME, Key=key_name)
+class Client(object):
+    def __init__(self):
+        self.bucket_name = os.environ["BUCKET_NAME"]
+        self.topic_arn = os.environ["TOPIC_ARN"]
 
+    def upload(self, key_name, body):
+        return s3_client.put_object(Body=body, Bucket=self.bucket_name, Key=key_name)
 
-def upload_file(local, remote):
-    s3_client.upload_file(local, BUCKET_NAME, str(remote))
+    def upload_file(self, local, remote):
+        s3_client.upload_file(local, self.bucket_name, str(remote))
 
+    def upload_frame(self, prefix, spec_d):
+        story = spec_d["story"]
+        frame = f"{story}.png"
+        button = Path(f"{prefix}/frames/{frame}")
+        # upload the button image (this is the check frame from Figma)
+        self.upload_file(f"test/data/{button.name}", button)
 
-def download(key_name):
-    r = s3_client.get_object(Bucket=BUCKET_NAME, Key=key_name)
-    return r["Body"].read()
+    def download(self, key_name):
+        r = s3_client.get_object(Bucket=self.bucket_name, Key=key_name)
+        return r["Body"].read()
 
+    def delete(self, key_name):
+        r = s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key_name)
+        for obj in r["Contents"]:
+            s3_client.delete_object(Bucket=self.bucket_name, Key=obj["Key"])
 
-def delete(key_name):
-    r = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=key_name)
-    for obj in r["Contents"]:
-        s3_client.delete_object(Bucket=BUCKET_NAME, Key=obj["Key"])
+    def exists(self, key_name):
+        r = s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key_name)
+        return "Contents" in r
 
+    def get_results(self, spec_d, upload=True, callback=None):
+        check_id = spec_d["check_id"]
+        prefix = f"checks/{check_id}"
+        results = f"{prefix}/report/results.json"
+        if callback is None:
+            callback = lambda _: None
 
-def exists(key_name):
-    r = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=key_name)
-    return "Contents" in r
+        # create a temporary SNS -> SQS fanout to receive status updates
+        with SNSFanoutSQS(
+            f"{check_id}-same-story-test-queue", f"{check_id}-same-story-test-topic"
+        ) as sns_sqs:
+            # let the backend server know where we'd like to receive status updates
+            spec_d["sns_topic_arn"] = sns_sqs.topic_arn
 
+            if upload:
+                self.upload_frame(prefix, spec_d)
 
-def upload_frame(prefix, spec_d):
-    story = spec_d["story"]
-    frame = f"{story}.png"
-    button = Path(f"{prefix}/frames/{frame}")
-    # upload the button image (this is the check frame from Figma)
-    upload_file(f"test/data/{button.name}", button)
+            # publish the job
+            sns_client.publish(
+                TopicArn=self.topic_arn,
+                Message=json.dumps(spec_d),
+            )
 
+            results_d = {"spec": spec_d, "status": []}
+            done = False
+            count = 100
+            # receive status updates, break when done, error or timeout
+            while not done and count:
+                log.info(f"{count=}")
+                for msg in sns_sqs.receive():
+                    log.info(f"received {msg=}")
+                    callback(msg)
+                    results_d["status"].append(msg)
+                    if msg["step"] == msg["step_count"] - 1 or "error" in msg:
+                        done = True
+                count -= 1
+            if done:
+                time.sleep(1)
+                results_d["results"] = json.loads(self.download(results))
 
-def get_results(spec_d, upload=True):
-    check_id = spec_d["check_id"]
-    prefix = f"checks/{check_id}"
-    results = f"{prefix}/report/results.json"
-
-    # create a temporary SNS -> SQS fanout to receive status updates
-    with SNSFanoutSQS(
-        f"{check_id}-same-story-test-queue", f"{check_id}-same-story-test-topic"
-    ) as sns_sqs:
-        # let the backend server know where we'd like to receive status updates
-        spec_d["sns_topic_arn"] = sns_sqs.topic_arn
-
-        if upload:
-            upload_frame(prefix, spec_d)
-
-        # publish the job
-        sns_client.publish(
-            TopicArn=TOPIC_ARN,
-            Message=json.dumps(spec_d),
-        )
-
-        results_d = {"spec": spec_d, "status": []}
-        done = False
-        count = 100
-        # receive status updates, break when done, error or timeout
-        while not done and count:
-            log.info(f"{count=}")
-            for msg in sns_sqs.receive():
-                log.info(f"received {msg=}")
-                results_d["status"].append(msg)
-                if msg["step"] == msg["step_count"] - 1 or "error" in msg:
-                    done = True
-            count -= 1
-        if done:
-            time.sleep(1)
-            results_d["results"] = json.loads(download(results))
-
-    log.info(f"got {results_d=}")
-    return results_d
+        log.info(f"got {results_d=}")
+        return results_d

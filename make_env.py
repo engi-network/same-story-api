@@ -7,8 +7,6 @@ if __name__ == "__main__":
         "AWS_DEFAULT_REGION",
         "GITHUB_TOKEN",
         "GITHUB_TOKEN_2",
-        "QUEUE_URL",
-        "TOPIC_ARN",
     ]:
         val = os.environ[key]
         print(f"{key}={val}")

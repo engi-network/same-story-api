@@ -6,10 +6,13 @@ import os
 from aiobotocore.session import get_session
 from dotenv import load_dotenv
 
-from check import CheckRequest
-from helpful_scripts import setup_logging
-
 load_dotenv()
+
+from helpful_scripts import setup_env, setup_logging
+
+setup_env()
+
+from check import CheckRequest
 
 QUEUE_URL = os.environ["QUEUE_URL"]
 # if storycap wouldn't mind us running multiple jobs concurrently, we could up this

@@ -3,54 +3,22 @@ import gettext
 import json
 import os
 import re
-import shutil
-import socket
 import sys
 from asyncio.subprocess import PIPE
-from contextlib import contextmanager
 from pathlib import Path
 from shlex import quote
 from time import perf_counter, time
 from urllib.parse import quote
 
-import boto3
-
-s3_client = boto3.client("s3")
-
-from helpful_scripts import setup_logging
+from helpful_scripts import get_port, get_s3_url, setup_logging
+from same_story_api.helpful_scripts import cleanup_directory, set_directory
 
 log = setup_logging()
 
 _ = gettext.gettext
 
 
-@contextmanager
-def set_directory(path):
-    origin = Path().absolute()
-    try:
-        os.chdir(path)
-        yield
-    finally:
-        os.chdir(origin)
-
-
-@contextmanager
-def cleanup(path):
-    try:
-        yield
-    finally:
-        if path.exists():
-            pass
-            # shutil.rmtree(path)
-
-
-def get_port():
-    sock = socket.socket()
-    sock.bind(("", 0))
-    return sock.getsockname()[1]
-
-
-BUCKET_NAME = os.environ.get("BUCKET_NAME", "same-story-api-dev")
+BUCKET_NAME = os.environ["BUCKET_NAME"]
 
 
 async def run(cmd, log_cmd=None):
@@ -130,9 +98,6 @@ class CheckRequest(object):
         self.check_dir = gettempdir() / self.prefix
         self.check_dir.mkdir(parents=True, exist_ok=True)
         self.step = 0
-
-    def get_url(self, path_quoted):
-        return f"{s3_client.meta.endpoint_url}/{self.prefix}/report/{path_quoted}"
 
     async def send_status(self, error=None):
         msg = {
@@ -280,6 +245,9 @@ class CheckRequest(object):
         _, _, self.mae = await run(f"compare -metric MAE '{self.screenshot}' '{self.frame}' null")
         await self.send_status()
 
+    def get_url(self, path_quoted):
+        return get_s3_url(f"{self.prefix}/report/{path_quoted}")
+
     async def upload(self):
         extra_args = "--acl public-read"
         urls = {"url_screenshot": self.get_url(self.get_screenshot())}
@@ -323,7 +291,7 @@ class CheckRequest(object):
             await run_seq([self.df, self.send_status, self.download, self.run_git])
             with set_directory(self.code):
                 # delete the node_modules directory; it's too big to persist
-                with cleanup(self.node_modules):
+                with cleanup_directory(self.node_modules):
                     await run_seq(
                         [
                             self.sync_repo,
