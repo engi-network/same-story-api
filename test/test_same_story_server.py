@@ -1,5 +1,6 @@
 import os
 from itertools import zip_longest
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -46,7 +47,7 @@ class Request(object):
         self.upload = upload
 
     def __enter__(self):
-        self.results = client.get_results(self.spec_d, upload=self.upload)
+        self.results = client.get_results(self.spec_d, Path("test/data"), upload=self.upload)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):

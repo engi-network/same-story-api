@@ -212,12 +212,12 @@ class Client(object):
     def upload_file(self, local, remote):
         s3_client.upload_file(local, self.bucket_name, str(remote))
 
-    def upload_frame(self, prefix, spec_d):
-        story = spec_d["story"]
+    def upload_frame(self, path):
+        story = self.spec_d["story"]
         frame = f"{story}.png"
-        button = Path(f"{prefix}/frames/{frame}")
+        button = Path(f"{self.prefix}/frames/{frame}")
         # upload the button image (this is the check frame from Figma)
-        self.upload_file(f"test/data/{button.name}", button)
+        self.upload_file(str(path / button.name), button)
 
     def download(self, key_name):
         r = s3_client.get_object(Bucket=self.bucket_name, Key=key_name)
@@ -232,10 +232,11 @@ class Client(object):
         r = s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key_name)
         return "Contents" in r
 
-    def get_results(self, spec_d, upload=True, callback=None):
+    def get_results(self, spec_d, path, upload=True, callback=None):
+        self.spec_d = spec_d
         check_id = spec_d["check_id"]
-        prefix = f"checks/{check_id}"
-        results = f"{prefix}/report/results.json"
+        self.prefix = f"checks/{check_id}"
+        results = f"{self.prefix}/report/results.json"
         if callback is None:
             callback = lambda _: None
 
@@ -247,7 +248,7 @@ class Client(object):
             spec_d["sns_topic_arn"] = sns_sqs.topic_arn
 
             if upload:
-                self.upload_frame(prefix, spec_d)
+                self.upload_frame(path)
 
             # publish the job
             sns_client.publish(
