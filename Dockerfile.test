@@ -5,4 +5,3 @@ WORKDIR /code
 COPY . .
 
 RUN pip install -r requirements-dev.txt
-RUN pip install .

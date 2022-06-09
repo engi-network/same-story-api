@@ -8,12 +8,13 @@ boto3 = {extras = ["crt"], version = "*"}
 aiobotocore = "*"
 coloredlogs = "*"
 python-dotenv = "*"
+requests = "*"
+same-story-api-engi = {editable = true, path = "."}
 
 [dev-packages]
 jupyterlab = "*"
 pytest = "*"
 build = "*"
-same-story-api-engi = {editable = true, path = "."}
 
 [requires]
 python_version = "3.9"
