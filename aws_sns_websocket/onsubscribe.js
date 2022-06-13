@@ -24,7 +24,7 @@ exports.handler = async (event, context) => {
         Item: {
             "connectionId": connectionId,
             "checkId": checkId,
-            "ttl": Date.now() + 60 * 30,
+            "ttl": (Date.now() / 1000) + (60 * 30),
         },
         ReturnValues: "NONE"
     };
