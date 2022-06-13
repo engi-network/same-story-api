@@ -9,7 +9,6 @@ from pathlib import Path
 
 import boto3
 import coloredlogs
-import requests
 
 
 def setup_logging(log_level=logging.INFO):
@@ -29,9 +28,6 @@ sns_client = boto3.client("sns")
 sqs_client = boto3.client("sqs")
 s3_client = boto3.client("s3")
 sts_client = boto3.client("sts")
-
-for service in ["sns", "sqs", "s3", "sts"]:
-    globals()[service] = boto3.client(service)
 
 
 def setup_env(env=None, region=None):
@@ -195,10 +191,6 @@ class SNSFanoutSQS(object):
             log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
             self.sqs.delete_queue(QueueUrl=self.queue_url)
             self.sns.delete_topic(TopicArn=self.topic_arn)
-
-
-def check_url(url):
-    assert requests.get(url).status_code == 200
 
 
 class Client(object):

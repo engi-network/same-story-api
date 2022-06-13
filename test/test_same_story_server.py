@@ -4,7 +4,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from same_story_api.helpful_scripts import Client, check_url, setup_env, setup_logging
+import requests
+from same_story_api.helpful_scripts import Client, setup_env, setup_logging
 
 _ = lambda s: s
 
@@ -24,6 +25,10 @@ log = setup_logging()
 setup_env()
 
 client = Client()
+
+
+def check_url(url):
+    assert requests.get(url).status_code == 200
 
 
 @pytest.fixture
