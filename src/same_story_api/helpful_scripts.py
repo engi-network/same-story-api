@@ -48,8 +48,10 @@ def setup_env(env=None, region=None):
     # a place for the backend server to dequeue job requests
     os.environ["QUEUE_URL"] = f"{sqs_client.meta._endpoint_url}/{account}/{name}"
     log.info(f"{os.environ['QUEUE_URL']=}")
-    os.environ["DEFAULT_STATUS_TOPIC_ARN"] = f"{sns_topic}-status"
-    log.info(f"{os.environ['DEFAULT_STATUS_TOPIC_ARN']=}")
+    # for testing use SNSFanoutSQS and send the topic ARN with the request
+    if env != "dev":
+        os.environ["DEFAULT_STATUS_TOPIC_ARN"] = f"{sns_topic}-status"
+        log.info(f"{os.environ['DEFAULT_STATUS_TOPIC_ARN']=}")
 
 
 @contextmanager
@@ -123,6 +125,20 @@ def allow_sns_to_write_to_sqs(topic_arn, queue_arn):
     )
 
 
+class NullFanout(object):
+    def __init__(self, *_, **__):
+        self.topic_arn = None
+
+    def __enter__(self):
+        return self
+
+    def receive(self, **_):
+        yield
+
+    def __exit__(self, *_):
+        pass
+
+
 class SNSFanoutSQS(object):
     """For testing only, in prod do this with Terraform"""
 
@@ -186,7 +202,7 @@ class SNSFanoutSQS(object):
                 ReceiptHandle=receipt_handle,
             )
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, *_):
         if not self.persist:
             log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
             self.sqs.delete_queue(QueueUrl=self.queue_url)
@@ -194,6 +210,17 @@ class SNSFanoutSQS(object):
 
 
 class Client(object):
+    SPEC_KEYS = [
+        "width",
+        "height",
+        "path",
+        "component",
+        "story",
+        "repository",
+        "branch",  # optional
+        "commit",  # optional
+    ]
+
     def __init__(self):
         self.bucket_name = os.environ["BUCKET_NAME"]
         self.topic_arn = os.environ["TOPIC_ARN"]
@@ -211,6 +238,10 @@ class Client(object):
         # upload the button image (this is the check frame from Figma)
         self.upload_file(str(path / button.name), button)
 
+    def get_path(self, error=False):
+        suffix = "error" if error else "results"
+        return f"{self.prefix}/report/{suffix}.json"
+
     def download(self, key_name):
         r = s3_client.get_object(Bucket=self.bucket_name, Key=key_name)
         return r["Body"].read()
@@ -224,20 +255,24 @@ class Client(object):
         r = s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key_name)
         return "Contents" in r
 
-    def get_results(self, spec_d, path, upload=True, callback=None):
+    def get_results(self, spec_d, path, upload=True, callback=None, no_status=False):
         self.spec_d = spec_d
         check_id = spec_d["check_id"]
         self.prefix = f"checks/{check_id}"
-        results = f"{self.prefix}/report/results.json"
+        results = self.get_path()
+        error = self.get_path(error=True)
         if callback is None:
             callback = lambda _: None
 
+        fanout_class = NullFanout if no_status else SNSFanoutSQS
+
         # create a temporary SNS -> SQS fanout to receive status updates
-        with SNSFanoutSQS(
+        with fanout_class(
             f"{check_id}-same-story-test-queue", f"{check_id}-same-story-test-topic"
-        ) as sns_sqs:
-            # let the backend server know where we'd like to receive status updates
-            spec_d["sns_topic_arn"] = sns_sqs.topic_arn
+        ) as fanout:
+            if fanout.topic_arn:
+                # let the backend server know where we'd like to receive status updates
+                spec_d["sns_topic_arn"] = fanout.topic_arn
 
             if upload:
                 self.upload_frame(path)
@@ -254,12 +289,18 @@ class Client(object):
             # receive status updates, break when done, error or timeout
             while not done and count:
                 log.info(f"{count=}")
-                for msg in sns_sqs.receive():
-                    log.info(f"received {msg=}")
-                    callback(msg)
-                    results_d["status"].append(msg)
-                    if msg["step"] == msg["step_count"] - 1 or "error" in msg:
-                        done = True
+                for msg in fanout.receive():
+                    if msg is None:
+                        # poll for it
+                        if self.exists(error) or self.exists(results):
+                            done = True
+                        time.sleep(30)
+                    else:
+                        log.info(f"received {msg=}")
+                        callback(msg)
+                        results_d["status"].append(msg)
+                        if msg["step"] == msg["step_count"] - 1 or "error" in msg:
+                            done = True
                 count -= 1
             if done:
                 time.sleep(1)
