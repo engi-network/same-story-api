@@ -1,12 +1,15 @@
 import WebSocket from "ws";
+import { argv } from 'node:process';
+
 
 const WS_URL = process.env["WS_URL"];
-const CHECK_ID = process.env["CHECK_ID"];
+const CHECK_ID = argv[2];
 
 const ws = new WebSocket(WS_URL);
 
 ws.on("open", function open() {
-    console.log("connected");
+    console.log(`connected to ${WS_URL}`);
+    console.log(`subscribing to ${CHECK_ID}`);
     ws.send(JSON.stringify({
         message: "subscribe",
         check_id: CHECK_ID
