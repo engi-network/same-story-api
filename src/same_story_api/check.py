@@ -6,6 +6,7 @@ import re
 import sys
 from asyncio.subprocess import PIPE
 from pathlib import Path
+from pickle import encode_long
 from shlex import quote
 from time import perf_counter, time
 from urllib.parse import quote
@@ -19,6 +20,7 @@ _ = gettext.gettext
 
 
 BUCKET_NAME = os.environ["BUCKET_NAME"]
+NPM_REGISTRY = os.environ.get("NPM_REGISTRY")
 
 
 async def run(cmd, log_cmd=None):
@@ -92,6 +94,7 @@ class CheckRequest(object):
 
     def __init__(self, spec_d, status_callback):
         log.info(f"{BUCKET_NAME=}")
+        log.info(f"{NPM_REGISTRY=}")
         self.spec_d = spec_d
         self.status_callack = status_callback
         self.prefix = Path(f"{BUCKET_NAME}/checks/{spec_d['check_id']}")
@@ -172,6 +175,8 @@ class CheckRequest(object):
                     self.code_snippet += fp.readline()
 
     async def install_packages(self):
+        if NPM_REGISTRY is not None:
+            await self.run_raise(f"npm set registry {NPM_REGISTRY}", e_key="install")
         await self.run_raise("npm install", e_key="install")
         await self.send_status()
 

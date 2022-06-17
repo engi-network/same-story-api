@@ -9,10 +9,12 @@ const logger = pino();
 const WS_URL = process.env["WS_URL"];
 const CHECK_ID = argv[2];
 
-var retries = 50;
+var retries = 5;
 
 function connect() {
     var ws;
+    var intervalId;
+
     if (--retries == 0) {
         logger.info(`giving up on ${WS_URL}`);
         process.exit(1);
@@ -27,7 +29,7 @@ function connect() {
             check_id: CHECK_ID
         }));
 
-        setInterval(() => {
+        intervalId = setInterval(() => {
             logger.info("ping");
             ws.send(JSON.stringify({ message: "ping" }));
         }, 10000);
@@ -35,6 +37,7 @@ function connect() {
 
     ws.on("close", function close() {
         logger.info("disconnected");
+        clearInterval(intervalId);
         connect();
     });
 
