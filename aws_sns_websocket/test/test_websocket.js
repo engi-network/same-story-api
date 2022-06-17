@@ -26,7 +26,11 @@ function connect() {
             message: "subscribe",
             check_id: CHECK_ID
         }));
-        // ws.close();
+
+        setInterval(() => {
+            logger.info("ping");
+            ws.send(JSON.stringify({ message: "ping" }));
+        }, 10000);
     });
 
     ws.on("close", function close() {
