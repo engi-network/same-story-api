@@ -32,6 +32,6 @@ exports.handler = async (event, context) => {
     const data = await docClient.put(params).promise();
     return {
         statusCode: 200,
-        body: "Subscribed for: " + connectionId
+        body: "subscribed for: " + connectionId
     };
 };

@@ -5,6 +5,6 @@ exports.handler = async (event, context) => {
     console.log(JSON.stringify(context, null, 2));
     return {
         statusCode: 200,
-        body: "Successfully connected"
+        body: "successfully connected"
     };
 };

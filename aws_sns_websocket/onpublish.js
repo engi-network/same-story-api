@@ -50,6 +50,6 @@ exports.handler = async (event, context) => {
 
     return {
         statusCode: 200,
-        body: "Message notified"
+        body: "message notified"
     };
 };
