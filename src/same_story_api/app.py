@@ -37,7 +37,9 @@ async def status_callback(sns, spec_d, msg):
     }
     if topic_arn.endswith("fifo"):
         # FIFO (first-in-first-out) topics require additional params for deduplication
-        kwargs.update({"MessageGroupId": msg["check_id"], "MessageDeduplicationId": msg["step"]})
+        kwargs.update(
+            {"MessageGroupId": msg["check_id"], "MessageDeduplicationId": str(msg["step"])}
+        )
     await sns.publish(**kwargs)
 
 
