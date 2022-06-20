@@ -31,10 +31,14 @@ async def status_callback(sns, spec_d, msg):
     if topic_arn is None:
         return
     log.info(f"sending status update to {topic_arn=} {msg=}")
-    await sns.publish(
-        TopicArn=topic_arn,
-        Message=json.dumps(msg),
-    )
+    kwargs = {
+        "TopicArn": topic_arn,
+        "Message": json.dumps(msg),
+    }
+    if topic_arn.endswith("fifo"):
+        # FIFO (first-in-first-out) topics require additional params for deduplication
+        kwargs.update({"MessageGroupId": msg["check_id"], "MessageDeduplicationId": msg["step"]})
+    await sns.publish(**kwargs)
 
 
 async def worker(n, queue):
