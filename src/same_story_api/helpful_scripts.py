@@ -50,7 +50,7 @@ def setup_env(env=None, region=None):
     log.info(f"{os.environ['QUEUE_URL']=}")
     # for testing use SNSFanoutSQS and send the topic ARN with the request
     if env != "dev":
-        os.environ["DEFAULT_STATUS_TOPIC_ARN"] = f"{sns_topic}-status"
+        os.environ["DEFAULT_STATUS_TOPIC_ARN"] = f"{sns_topic}-status.fifo"
         log.info(f"{os.environ['DEFAULT_STATUS_TOPIC_ARN']=}")
 
 
