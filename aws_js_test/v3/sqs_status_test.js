@@ -29,22 +29,20 @@ const processMsg = async (msg) => {
     if (msg_.Message.check_id === "") {
         // TODO check the check_id before deleting the status message
     }
-    var deleteParams = {
+    const data_ = await sqsClient.send(new DeleteMessageCommand({
         QueueUrl: QUEUE_URL,
         ReceiptHandle: msg.ReceiptHandle
-    };
-    const data_ = await sqsClient.send(new DeleteMessageCommand(deleteParams));
+    }));
     logger.info(`message deleted: ${stringify(data_)}`);
 }
 
 const receiveMessages = async () => {
-    const params = {
+    logger.info("checking for messages");
+    const data = await sqsClient.send(new ReceiveMessageCommand({
         QueueUrl: QUEUE_URL,
         WaitTimeSeconds: 1,
         MaxNumberOfMessages: 10,
-    };
-    logger.info("checking for messages");
-    const data = await sqsClient.send(new ReceiveMessageCommand(params));
+    }));
     if (data.Messages) {
         await Promise.all(data.Messages.map(processMsg));
     }
