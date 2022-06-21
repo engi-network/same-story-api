@@ -11,7 +11,8 @@
     "@aws-sdk/client-sqs": "^3.112.0",
     "@aws-sdk/credential-provider-cognito-identity": "^3.32.0",
     "@aws-sdk/s3-request-presigner": "^3.99.0",
-    "fs": "0.0.1-security"
+    "fs": "0.0.1-security",
+    "pino": "^8.0.0"
   },
   "devDependencies": {
     "@aws-sdk/types": "^3.32.0",
