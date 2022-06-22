@@ -9,6 +9,7 @@ from pathlib import Path
 
 import boto3
 import coloredlogs
+from attr import Attribute
 
 
 def setup_logging(log_level=logging.INFO):
@@ -140,36 +141,47 @@ class NullFanout(object):
 
 
 class SNSFanoutSQS(object):
-    """For testing only, in prod do this with Terraform"""
+    """Create a SNS topic and connect it to an SQS queue. Use contextlib to
+    optionally tear down both the topic and queue after exiting a with
+    statement"""
 
-    def __init__(self, queue_name, topic_name, visibility_timeout=180, persist=False):
+    def __init__(self, queue_name, topic_name, visibility_timeout=180, persist=False, fifo=True):
         self.sns = sns_client
         self.sqs = sqs_client
-        self.queue_name = queue_name
-        self.topic_name = topic_name
+        self.queue_name = f"{queue_name}.fifo" if fifo else queue_name
+        self.topic_name = f"{topic_name}.fifo" if fifo else topic_name
         self.visibility_timeout = visibility_timeout
         self.persist = persist
+        self.fifo = fifo
 
     def __enter__(self):
         log.info(f"creating {self.queue_name=}")
+        # create the SQS queue
+        fifo = str(self.fifo).lower()
         r = self.sqs.create_queue(
             QueueName=self.queue_name,
-            Attributes={"VisibilityTimeout": str(self.visibility_timeout)},
+            Attributes={"VisibilityTimeout": str(self.visibility_timeout), "FifoQueue": fifo},
         )
         self.queue_url = r["QueueUrl"]
         r = self.sqs.get_queue_attributes(QueueUrl=self.queue_url, AttributeNames=["QueueArn"])
         self.queue_arn = r["Attributes"]["QueueArn"]
         log.info(f"{self.queue_url=} {self.queue_arn=}")
         log.info(f"creating {self.topic_name=}")
-        r = self.sns.create_topic(Name=self.topic_name)
+        # create the SNS topic
+        r = self.sns.create_topic(
+            Name=self.topic_name,
+            Attributes={"FifoTopic": fifo, "ContentBasedDeduplication": fifo},
+        )
         self.topic_arn = r["TopicArn"]
         log.info(f"{self.topic_arn=}")
+        # subscribe the topic to the queue, aka fanout
         r = self.sns.subscribe(
             TopicArn=self.topic_arn,
             Protocol="sqs",
             Endpoint=self.queue_arn,
             ReturnSubscriptionArn=True,
         )
+        # permissions
         r = self.sns.set_topic_attributes(
             TopicArn=self.topic_arn,
             AttributeName="Policy",

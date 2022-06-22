@@ -5,7 +5,11 @@ import pino from "pino";
 
 const logger = pino();
 
-// Set the AWS Region
+// be careful with this script b/c it deletes status messages from QUEUE_URL w/o
+// filtering on check_id
+// could cause a lot of confusion if left running on a laptop somewhere :)
+
+// AWS Region
 const REGION = "us-west-2";
 const QUEUE_URL = process.env["QUEUE_URL"];
 const IDENTITY_POOL_ID = process.env["IDENTITY_POOL_ID"];
