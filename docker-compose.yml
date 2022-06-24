@@ -11,6 +11,11 @@ services:
       - .:/code
       - /run/same-story-api:/run/same-story-api
     env_file: .env
+  celery:
+    build: .
+    command: celery -A same_story_api.tasks worker --loglevel=INFO
+    volumes: *volumes
+    env_file: .env
   test:
     build:
       context: .

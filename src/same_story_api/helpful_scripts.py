@@ -9,7 +9,6 @@ from pathlib import Path
 
 import boto3
 import coloredlogs
-from attr import Attribute
 
 
 def setup_logging(log_level=logging.INFO):
@@ -30,16 +29,28 @@ sqs_client = boto3.client("sqs")
 s3_client = boto3.client("s3")
 sts_client = boto3.client("sts")
 
+AWS_REGION = boto3.session.Session().region_name
+AWS_ACCOUNT = sts_client.get_caller_identity()["Account"]
 
-def setup_env(env=None, region=None):
-    """env is one of dev, staging, production"""
-    if region is None:
-        region = boto3.session.Session().region_name
+
+def get_name(env=None):
     if env is None:
         env = os.environ.get("ENV", "dev")
-    name = f"same-story-api-{env}"
-    account = sts_client.get_caller_identity()["Account"]
-    sns_topic = f"arn:aws:sns:{region}:{account}:{name}"
+    return f"same-story-api-{env}"
+
+
+def get_sns_arn(name):
+    return f"arn:aws:sns:{AWS_REGION}:{AWS_ACCOUNT}:{name}"
+
+
+def get_sqs_url(name):
+    return f"{sqs_client.meta._endpoint_url}/{AWS_ACCOUNT}/{name}"
+
+
+def setup_env(env=None):
+    """env is one of dev, staging, production"""
+    name = get_name(env)
+    sns_topic = get_sns_arn(name)
     # a place to submit job requests
     os.environ["TOPIC_ARN"] = sns_topic
     log.info(f"{os.environ['TOPIC_ARN']=}")
@@ -47,12 +58,8 @@ def setup_env(env=None, region=None):
     os.environ["BUCKET_NAME"] = name
     log.info(f"{os.environ['BUCKET_NAME']=}")
     # a place for the backend server to dequeue job requests
-    os.environ["QUEUE_URL"] = f"{sqs_client.meta._endpoint_url}/{account}/{name}"
+    os.environ["QUEUE_URL"] = get_sqs_url(name)
     log.info(f"{os.environ['QUEUE_URL']=}")
-    # for testing use SNSFanoutSQS and send the topic ARN with the request
-    if env != "dev":
-        os.environ["DEFAULT_STATUS_TOPIC_ARN"] = f"{sns_topic}-status.fifo"
-        log.info(f"{os.environ['DEFAULT_STATUS_TOPIC_ARN']=}")
 
 
 @contextmanager
@@ -153,8 +160,26 @@ class SNSFanoutSQS(object):
         self.visibility_timeout = visibility_timeout
         self.persist = persist
         self.fifo = fifo
+        self.created = False
 
-    def __enter__(self):
+    @staticmethod
+    def load(topic_arn, queue_url):
+        self = SNSFanoutSQS("", "")
+        self.topic_arn = topic_arn
+        self.queue_url = queue_url
+        return self
+
+    def topic_exists(self):
+        return get_sns_arn(self.topic_name) in [
+            t["TopicArn"] for t in self.sns.list_topics()["Topics"]
+        ]
+
+    def create(self):
+        if self.topic_exists():
+            log.info(f"topic {self.topic_name} exists")
+            self.topic_arn = get_sns_arn(self.topic_name)
+            self.queue_url = get_sqs_url(self.queue_name)
+            return self
         log.info(f"creating {self.queue_name=}")
         # create the SQS queue
         fifo = str(self.fifo).lower()
@@ -191,7 +216,11 @@ class SNSFanoutSQS(object):
             QueueUrl=self.queue_url,
             Attributes={"Policy": allow_sns_to_write_to_sqs(self.topic_arn, self.queue_arn)},
         )
+        self.created = True
         return self
+
+    def __enter__(self):
+        return self.create()
 
     def publish(self, d):
         return self.sns.publish(
@@ -214,11 +243,14 @@ class SNSFanoutSQS(object):
                 ReceiptHandle=receipt_handle,
             )
 
+    def cleanup(self):
+        log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
+        self.sqs.delete_queue(QueueUrl=self.queue_url)
+        self.sns.delete_topic(TopicArn=self.topic_arn)
+
     def __exit__(self, *_):
         if not self.persist:
-            log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
-            self.sqs.delete_queue(QueueUrl=self.queue_url)
-            self.sns.delete_topic(TopicArn=self.topic_arn)
+            self.cleanup()
 
 
 class Client(object):

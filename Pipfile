@@ -9,6 +9,7 @@ aiobotocore = "*"
 coloredlogs = "*"
 python-dotenv = "*"
 same-story-api-engi = {editable = true, path = "."}
+celery = {extras = ["sqs"], version = "*"}
 
 [dev-packages]
 jupyterlab = "*"
