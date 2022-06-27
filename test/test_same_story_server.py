@@ -37,12 +37,12 @@ def success_spec():
         "check_id": str(uuid4()),
         "width": "800",
         "height": "600",
-        "path": "Global/Components",
+        "path": "Example",
         "component": "Button",
-        "story": "Button With Knobs",
-        "repository": "engi-network/figma-plugin",
-        "branch": "main",  # optional
-        "commit": "b606897faec4ae0983930c2707845e5792a38255",  # optional
+        "story": "Primary",
+        "repository": "engi-network/same-story-storybook",
+        "branch": "master",  # optional
+        "commit": "7a9fe60aeb107ea26e6fb5aa466623170e25a8d7",  # optional
     }
 
 
@@ -108,7 +108,7 @@ def success_results_no_commit_branch(success_spec):
 def success_results_private_repo(success_spec):
     del success_spec["branch"]
     del success_spec["commit"]
-    success_spec["repository"] = "cck197/figma-plugin"
+    success_spec["repository"] = success_spec["repository"].replace("engi-network", "cck197")
     success_spec["github_token"] = os.environ["GITHUB_TOKEN_2"]
     with Request(success_spec) as req:
         yield req.results
@@ -145,11 +145,11 @@ def get_error(results, key):
 
 
 def check_code_snippet_in_results(results):
-    assert results["code_path"] == "src/app/components/global/Button/Button.stories.tsx"
+    assert results["code_path"] == "src/stories/Button.stories.jsx"
     assert (
-        results["code_snippet"] == "import { action } from '@storybook/addon-actions'\n"
-        "import { boolean, select, text } from '@storybook/addon-knobs'\n\n"
-        "import Button from './Button'\n\n"
+        results["code_snippet"] == "import React from 'react';\n\n"
+        "import { Button } from './Button';\n\n"
+        "// More on default export: https://storybook.js.org/docs/react/writing-stories/introduction#default-export\n"
     )
 
 

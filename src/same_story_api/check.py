@@ -6,7 +6,6 @@ import re
 import sys
 from asyncio.subprocess import PIPE
 from pathlib import Path
-from pickle import encode_long
 from shlex import quote
 from time import perf_counter, time
 from urllib.parse import quote
@@ -165,14 +164,16 @@ class CheckRequest(object):
         await self.send_status()
 
     def get_code_snippet(self):
-        component = self.spec_d["component"]
-        path = "/".join(reversed([s.lower() for s in self.spec_d["path"].split("/")]))
-        self.code_path = Path(f"src/app/{path}/{component}/{component}.stories.tsx")
         self.code_snippet = ""
-        if self.code_path.exists():
-            with open(self.code_path) as fp:
+        self.code_path = None
+        # the storybook source might be a .jsx or .tsx file
+        for p in Path("./").rglob(f"*/{self.spec_d['component']}.stories.[jt]sx"):
+            self.code_path = p
+            with open(p) as fp:
                 for _ in range(5):
                     self.code_snippet += fp.readline()
+            break
+        log.info(f"{self.code_path=}")
 
     async def install_packages(self):
         if NPM_REGISTRY is not None:
@@ -316,12 +317,12 @@ class CheckRequest(object):
             await self.run_raise(
                 f"aws s3 cp {results_file} s3://{self.prefix}/report/{self.results}"
             )
+            await self.send_status(error=e)
 
     async def run_raise(self, cmd, returncode=0, e_key=None, log_cmd=None):
         returncode_, stdout, stderr = await run(cmd, log_cmd=log_cmd)
         error = CheckError(e_key, stdout, stderr) if returncode_ != returncode else None
         if error:
-            await self.send_status(error=error)
             raise error
         return returncode_
 
