@@ -5,6 +5,7 @@ import shutil
 import socket
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 import boto3
@@ -170,7 +171,7 @@ class SNSFanoutSQS(object):
         return self
 
     def topic_exists(self):
-        return get_sns_arn(self.topic_name) in [
+        return getattr(self, "topic_arn", get_sns_arn(self.topic_name)) in [
             t["TopicArn"] for t in self.sns.list_topics()["Topics"]
         ]
 
@@ -219,6 +220,12 @@ class SNSFanoutSQS(object):
         self.created = True
         return self
 
+    def last_modified(self):
+        r = self.sqs.get_queue_attributes(
+            QueueUrl=self.queue_url, AttributeNames=["LastModifiedTimestamp"]
+        )
+        return datetime.utcfromtimestamp(int(r["Attributes"]["LastModifiedTimestamp"]))
+
     def __enter__(self):
         return self.create()
 
@@ -244,13 +251,22 @@ class SNSFanoutSQS(object):
             )
 
     def cleanup(self):
-        log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
-        self.sqs.delete_queue(QueueUrl=self.queue_url)
-        self.sns.delete_topic(TopicArn=self.topic_arn)
+        log.info(f"cleanup {self.topic_arn=}")
+        if self.topic_exists():
+            log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
+            self.sqs.delete_queue(QueueUrl=self.queue_url)
+            self.sns.delete_topic(TopicArn=self.topic_arn)
+            return True
+        return False
 
     def __exit__(self, *_):
         if not self.persist:
             self.cleanup()
+
+
+def last_step(msg):
+    """Return True if this is the last status update message"""
+    return msg["step"] == msg["step_count"] - 1
 
 
 class Client(object):

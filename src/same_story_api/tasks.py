@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from celery import Celery
 from kombu.utils.url import safequote
@@ -16,6 +17,11 @@ app = Celery(
 )
 
 
-@app.task
-def fanout_cleanup(topic_arn, queue_url):
-    SNSFanoutSQS.load(topic_arn, queue_url).cleanup()
+@app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True)
+def fanout_cleanup(self, topic_arn, queue_url, countdown):
+    fanout = SNSFanoutSQS.load(topic_arn, queue_url)
+    if (datetime.utcnow() - fanout.last_modified()).seconds < countdown:
+        # SQS queue still in use, Celery will retry later
+        raise Exception(f"{queue_url} still in use")
+    # deleted the queue and SNS topic
+    fanout.cleanup()
