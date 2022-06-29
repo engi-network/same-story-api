@@ -134,6 +134,10 @@ def allow_sns_to_write_to_sqs(topic_arn, queue_arn):
     )
 
 
+def get_topic_arn(queue_url):
+    return get_sns_arn(queue_url.split("/")[-1])
+
+
 class NullFanout(object):
     def __init__(self, *_, **__):
         self.topic_arn = None
@@ -170,6 +174,27 @@ class SNSFanoutSQS(object):
         self.queue_url = queue_url
         return self
 
+    @staticmethod
+    def cleanup_old(suffix, age_cutoff=60 * 60):
+        now = datetime.utcnow()
+        log.info("cleaning up old SQS and SNS queues")
+        r = sqs_client.list_queues(QueueNamePrefix=get_name())
+        for queue_url in r["QueueUrls"]:
+            if not suffix in queue_url:
+                continue
+            try:
+                r_ = sqs_client.get_queue_attributes(
+                    QueueUrl=queue_url, AttributeNames=["LastModifiedTimestamp"]
+                )
+                age = (
+                    now - datetime.utcfromtimestamp(int(r_["Attributes"]["LastModifiedTimestamp"]))
+                ).seconds
+                log.info(f"{queue_url} is {age} seconds old, {age_cutoff=}")
+                if age >= age_cutoff:
+                    SNSFanoutSQS.load(get_topic_arn(queue_url), queue_url).cleanup()
+            except sqs_client.exceptions.QueueDoesNotExist:
+                continue
+
     def topic_exists(self):
         return getattr(self, "topic_arn", get_sns_arn(self.topic_name)) in [
             t["TopicArn"] for t in self.sns.list_topics()["Topics"]
@@ -183,10 +208,12 @@ class SNSFanoutSQS(object):
             return self
         log.info(f"creating {self.queue_name=}")
         # create the SQS queue
-        fifo = str(self.fifo).lower()
+        attrs = {"VisibilityTimeout": str(self.visibility_timeout)}
+        if self.fifo:
+            attrs["FifoQueue"] = "true"
         r = self.sqs.create_queue(
             QueueName=self.queue_name,
-            Attributes={"VisibilityTimeout": str(self.visibility_timeout), "FifoQueue": fifo},
+            Attributes=attrs,
         )
         self.queue_url = r["QueueUrl"]
         r = self.sqs.get_queue_attributes(QueueUrl=self.queue_url, AttributeNames=["QueueArn"])
@@ -196,7 +223,9 @@ class SNSFanoutSQS(object):
         # create the SNS topic
         r = self.sns.create_topic(
             Name=self.topic_name,
-            Attributes={"FifoTopic": fifo, "ContentBasedDeduplication": fifo},
+            Attributes={"FifoTopic": "true", "ContentBasedDeduplication": "true"}
+            if self.fifo
+            else {},
         )
         self.topic_arn = r["TopicArn"]
         log.info(f"{self.topic_arn=}")
@@ -251,7 +280,6 @@ class SNSFanoutSQS(object):
             )
 
     def cleanup(self):
-        log.info(f"cleanup {self.topic_arn=}")
         if self.topic_exists():
             log.info(f"deleting {self.queue_url=} {self.topic_arn=}")
             self.sqs.delete_queue(QueueUrl=self.queue_url)
@@ -262,11 +290,6 @@ class SNSFanoutSQS(object):
     def __exit__(self, *_):
         if not self.persist:
             self.cleanup()
-
-
-def last_step(msg):
-    """Return True if this is the last status update message"""
-    return msg["step"] == msg["step_count"] - 1
 
 
 class Client(object):

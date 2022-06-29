@@ -11,11 +11,9 @@ load_dotenv()
 from same_story_api.helpful_scripts import (
     SNSFanoutSQS,
     get_name,
-    last_step,
     setup_env,
     setup_logging,
 )
-from same_story_api.tasks import fanout_cleanup
 
 setup_env()
 
@@ -36,10 +34,10 @@ log_level = logging.DEBUG if debug else logging.INFO
 log = setup_logging(log_level)
 
 
-def get_sns_topic(spec_d, msg):
+def get_sns_topic(spec_d):
     """Get the SNS topic for status updates. If an ARN is given in spec_d then
-    use it. Otherwise, create a temporary SQS -> SNS fanout and schedule its
-    destruction"""
+    use it. Otherwise, create a temporary SQS -> SNS fanout. It will get cleaned
+    up by in a separate process."""
     topic_arn = spec_d.get("sns_topic_arn")
     if topic_arn is not None:
         return topic_arn
@@ -48,16 +46,11 @@ def get_sns_topic(spec_d, msg):
     fanout = SNSFanoutSQS(
         name, name, persist=True, visibility_timeout=STATUS_VISIBILITY_TIMEOUT
     ).create()
-    if last_step(msg):
-        fanout_cleanup.apply_async(
-            (fanout.topic_arn, fanout.queue_url, STATUS_CLEANUP_TIME),
-            countdown=STATUS_CLEANUP_TIME,
-        )
     return fanout.topic_arn
 
 
 async def status_callback(sns, spec_d, msg):
-    topic_arn = get_sns_topic(spec_d, msg)
+    topic_arn = get_sns_topic(spec_d)
     if topic_arn is None:
         return
     log.info(f"sending status update to {topic_arn=} {msg=}")
