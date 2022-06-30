@@ -157,21 +157,20 @@ class SNSFanoutSQS(object):
     optionally tear down both the topic and queue after exiting a with
     statement"""
 
-    def __init__(self, queue_name, topic_name, visibility_timeout=180, persist=False, fifo=True):
+    def __init__(self, name, visibility_timeout=180, persist=False, fifo=True):
         self.sns = sns_client
         self.sqs = sqs_client
-        self.queue_name = f"{queue_name}.fifo" if fifo else queue_name
-        self.topic_name = f"{topic_name}.fifo" if fifo else topic_name
+        self.name = f"{name}.fifo" if fifo else name
         self.visibility_timeout = visibility_timeout
         self.persist = persist
         self.fifo = fifo
         self.created = False
 
     @staticmethod
-    def load(topic_arn, queue_url):
-        self = SNSFanoutSQS("", "")
-        self.topic_arn = topic_arn
+    def load(queue_url):
+        self = SNSFanoutSQS("")
         self.queue_url = queue_url
+        self.topic_arn = get_topic_arn(queue_url)
         return self
 
     @staticmethod
@@ -191,38 +190,38 @@ class SNSFanoutSQS(object):
                 ).seconds
                 log.info(f"{queue_url} is {age} seconds old, {age_cutoff=}")
                 if age >= age_cutoff:
-                    SNSFanoutSQS.load(get_topic_arn(queue_url), queue_url).cleanup()
+                    SNSFanoutSQS.load(queue_url).cleanup()
             except sqs_client.exceptions.QueueDoesNotExist:
                 continue
 
     def topic_exists(self):
-        return getattr(self, "topic_arn", get_sns_arn(self.topic_name)) in [
+        return getattr(self, "topic_arn", get_sns_arn(self.name)) in [
             t["TopicArn"] for t in self.sns.list_topics()["Topics"]
         ]
 
     def create(self):
         if self.topic_exists():
-            log.info(f"topic {self.topic_name} exists")
-            self.topic_arn = get_sns_arn(self.topic_name)
-            self.queue_url = get_sqs_url(self.queue_name)
+            log.info(f"topic {self.name} exists")
+            self.topic_arn = get_sns_arn(self.name)
+            self.queue_url = get_sqs_url(self.name)
             return self
-        log.info(f"creating {self.queue_name=}")
+        log.info(f"creating {self.name=}")
         # create the SQS queue
         attrs = {"VisibilityTimeout": str(self.visibility_timeout)}
         if self.fifo:
             attrs["FifoQueue"] = "true"
         r = self.sqs.create_queue(
-            QueueName=self.queue_name,
+            QueueName=self.name,
             Attributes=attrs,
         )
         self.queue_url = r["QueueUrl"]
         r = self.sqs.get_queue_attributes(QueueUrl=self.queue_url, AttributeNames=["QueueArn"])
         self.queue_arn = r["Attributes"]["QueueArn"]
         log.info(f"{self.queue_url=} {self.queue_arn=}")
-        log.info(f"creating {self.topic_name=}")
+        log.info(f"creating {self.name=}")
         # create the SNS topic
         r = self.sns.create_topic(
-            Name=self.topic_name,
+            Name=self.name,
             Attributes={"FifoTopic": "true", "ContentBasedDeduplication": "true"}
             if self.fifo
             else {},
@@ -350,9 +349,7 @@ class Client(object):
         fanout_class = NullFanout if no_status else SNSFanoutSQS
 
         # create a temporary SNS -> SQS fanout to receive status updates
-        with fanout_class(
-            f"{check_id}-same-story-test-queue", f"{check_id}-same-story-test-topic"
-        ) as fanout:
+        with fanout_class(f"{check_id}-same-story-test-queue") as fanout:
             if fanout.topic_arn:
                 # let the backend server know where we'd like to receive status updates
                 spec_d["sns_topic_arn"] = fanout.topic_arn

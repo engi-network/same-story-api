@@ -26,8 +26,6 @@ MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 1))
 WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 # visibility timeout for status messages
 STATUS_VISIBILITY_TIMEOUT = int(os.environ.get("STATUS_VISIBILITY_TIMEOUT", 5))
-# how long in seconds to wait before cleaning up the SNS -> SQS status message fanout
-STATUS_CLEANUP_TIME = int(os.environ.get("STATUS_CLEANUP_TIME", 60 * 60))
 
 debug = os.environ.get("DEBUG", False)
 log_level = logging.DEBUG if debug else logging.INFO
@@ -37,14 +35,14 @@ log = setup_logging(log_level)
 def get_sns_topic(spec_d):
     """Get the SNS topic for status updates. If an ARN is given in spec_d then
     use it. Otherwise, create a temporary SQS -> SNS fanout. It will get cleaned
-    up by in a separate process."""
+    up by a separate process."""
     topic_arn = spec_d.get("sns_topic_arn")
     if topic_arn is not None:
         return topic_arn
     check_id = spec_d["check_id"]
     name = f"{get_name()}-{check_id}-status"
     fanout = SNSFanoutSQS(
-        name, name, persist=True, visibility_timeout=STATUS_VISIBILITY_TIMEOUT
+        name, persist=True, visibility_timeout=STATUS_VISIBILITY_TIMEOUT
     ).create()
     return fanout.topic_arn
 

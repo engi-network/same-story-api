@@ -18,7 +18,7 @@ app = Celery(
 
 @app.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
-    # calls cleanup_old_sns_sqs every 30 seconds
+    # clean up old status message SNS -> SQS fanouts every five minutes
     sender.add_periodic_task(60.0 * 5, cleanup_old_status_fanouts)
 
 
