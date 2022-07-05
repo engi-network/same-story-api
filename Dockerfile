@@ -2,7 +2,7 @@
 FROM docker.io/python:3.9
 
 # install system dependencies
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
+RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key C99B11DEB97541F0
 RUN apt-get -y update
 RUN apt-get -yq install software-properties-common
 RUN apt-get -y update
