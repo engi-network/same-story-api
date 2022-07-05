@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 
 from aiobotocore.session import get_session
 from dotenv import load_dotenv
@@ -26,6 +27,12 @@ MAX_QUEUE_MESSAGES = int(os.environ.get("MAX_QUEUE_MESSAGES", 1))
 WAIT_TIME = int(os.environ.get("WAIT_TIME", 5))
 # visibility timeout for status messages
 STATUS_VISIBILITY_TIMEOUT = int(os.environ.get("STATUS_VISIBILITY_TIMEOUT", 5))
+
+# Signal sent by AWS during ECS task shutdown before SIGKILL / forceful task termination
+ECS_SIG_CANCEL = signal.SIGTERM
+# How long to wait for running tasks to complete after ECS_SIG_CANCEL, should be 
+# less
+TASK_SHUTDOWN_SECS = 55
 
 debug = os.environ.get("DEBUG", False)
 log_level = logging.DEBUG if debug else logging.INFO
@@ -115,10 +122,20 @@ async def poll_queue():
             except KeyboardInterrupt:
                 break
 
-    # cancel our worker tasks.
-    for task in tasks:
-        task.cancel()
-    # wait until all worker tasks are cancelled.
+            except asyncio.CancelledError:
+                log.info(f"Received signal ({ECS_SIG_CANCEL.name}), shutting down")
+                break
+
+    # Gracefully shutdown any running tasks
+    if any([not task.done() for task in tasks]):
+        # Wait TASK_SHUTDOWN_SECS for running tasks to complete their work.
+        log.info(f"Waiting {TASK_SHUTDOWN_SECS} for running tasks to complete")
+        _, pending = await asyncio.wait({*tasks}, timeout=TASK_SHUTDOWN_SECS)
+
+        # cancel our worker tasks after waiting
+        for task in pending:
+            log.info(f"Cancelling task ({task.get_name()}) after {TASK_SHUTDOWN_SECS} seconds")
+            task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
 
     log.info("done")
@@ -126,7 +143,9 @@ async def poll_queue():
 
 def main():
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(poll_queue())
+    main_loop = asyncio.ensure_future(poll_queue())
+    loop.add_signal_handler(ECS_SIG_CANCEL, main_loop.cancel)
+    loop.run_until_complete(main_loop)
 
 
 if __name__ == "__main__":
