@@ -202,15 +202,15 @@ class CheckRequest(object):
             f"--serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
-        self.screenshot = self.code / self.get_screenshot(quote=lambda x: x)
-        error = (
-            None
-            if self.screenshot.exists()
-            else CheckError("storycap", stderr=str(self.screenshot))
-        )
-        await self.send_status(error=error)
-        if error:
-            raise error
+        screenshot = self.get_screenshot(quote=lambda x: x)
+        self.screenshot = self.code / screenshot
+        if self.screenshot.exists():
+            await self.send_status()
+        else:
+            raise CheckError(
+                "storycap",
+                stderr=f"storycap ran successfully but expected screenshot {screenshot} wasn't created",
+            )
 
     async def run_visual_comparisons(self):
         self.gray_difference = Path("gray_difference.png")
