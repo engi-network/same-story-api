@@ -30,9 +30,9 @@ STATUS_VISIBILITY_TIMEOUT = int(os.environ.get("STATUS_VISIBILITY_TIMEOUT", 5))
 
 # Signal sent by AWS during ECS task shutdown before SIGKILL / forceful task termination
 ECS_SIG_CANCEL = signal.SIGTERM
-# How long to wait for running tasks to complete after ECS_SIG_CANCEL, should be 
-# less
-TASK_SHUTDOWN_SECS = 55
+# how long to wait for running tasks to complete after ECS_SIG_CANCEL, should be
+# longer than it takes to complete the task
+TASK_SHUTDOWN_SECS = int(os.environ.get("TASK_SHUTDOWN_SECS", 120))
 
 debug = os.environ.get("DEBUG", False)
 log_level = logging.DEBUG if debug else logging.INFO
@@ -123,18 +123,18 @@ async def poll_queue():
                 break
 
             except asyncio.CancelledError:
-                log.info(f"Received signal ({ECS_SIG_CANCEL.name}), shutting down")
+                log.info(f"received signal ({ECS_SIG_CANCEL.name}), shutting down")
                 break
 
     # Gracefully shutdown any running tasks
     if any([not task.done() for task in tasks]):
         # Wait TASK_SHUTDOWN_SECS for running tasks to complete their work.
-        log.info(f"Waiting {TASK_SHUTDOWN_SECS} for running tasks to complete")
+        log.info(f"waiting {TASK_SHUTDOWN_SECS} for running tasks to complete")
         _, pending = await asyncio.wait({*tasks}, timeout=TASK_SHUTDOWN_SECS)
 
         # cancel our worker tasks after waiting
         for task in pending:
-            log.info(f"Cancelling task ({task.get_name()}) after {TASK_SHUTDOWN_SECS} seconds")
+            log.info(f"cancelling task ({task.get_name()}) after {TASK_SHUTDOWN_SECS} seconds")
             task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
 
