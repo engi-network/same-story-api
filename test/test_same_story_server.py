@@ -153,15 +153,19 @@ def check_code_snippet_in_results(results):
     )
 
 
-def test_should_be_able_to_successfully_run_check(success_results):
-    results = success_results["results"]
-    spec_d = success_results["spec"]
-    assert not "error" in results
-
+# TODO check for code_snippet and url_screenshot on a given step
+def check_status_messages(success_results):
     for (i, msg), status in zip_longest(enumerate(STATUS_MESSAGES), success_results["status"]):
         assert status["step"] == i
         assert status["step_count"] == len(STATUS_MESSAGES)
         assert status["message"] == msg
+
+
+def test_should_be_able_to_successfully_run_check(success_results):
+    results = success_results["results"]
+    spec_d = success_results["spec"]
+    assert not "error" in results
+    check_status_messages(success_results)
 
     check_id = success_results["spec"]["check_id"]
     prefix = f"checks/{check_id}"
@@ -184,6 +188,8 @@ def test_should_be_able_to_successfully_run_check(success_results):
     assert duration > 0 and duration < 200
     check_spec_in_results(spec_d, results)
     check_code_snippet_in_results(results)
+    code_size = results["code_size"]
+    assert code_size > 2000000 and code_size < 5000000
     for key in ("gray_difference", "blue_difference", "screenshot"):
         check_url(results[f"url_{key}"])
 

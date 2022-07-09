@@ -161,6 +161,7 @@ class CheckRequest(object):
         if commit:
             await self.run_raise(f"git checkout {commit}", e_key="commit")
         self.get_code_snippet()
+        self.get_code_size()
         await self.send_status()
 
     def get_code_snippet(self):
@@ -174,6 +175,9 @@ class CheckRequest(object):
                     self.code_snippet += fp.readline()
             break
         log.info(f"{self.code_path=}")
+
+    def get_code_size(self):
+        self.code_size = sum(f.stat().st_size for f in self.code.glob("**/*") if f.is_file())
 
     async def install_packages(self):
         if NPM_REGISTRY is not None:
@@ -280,6 +284,7 @@ class CheckRequest(object):
                 "completed_at": self.stop,
                 "code_path": str(self.code_path),
                 "code_snippet": self.code_snippet,
+                "code_size": self.code_size,
             },
             open(self.results, "w"),
         )
