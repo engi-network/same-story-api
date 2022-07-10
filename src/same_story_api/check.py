@@ -90,11 +90,13 @@ class CheckRequest(object):
         _("completed numeric comparisons"),
         _("uploaded screenshots"),
     ]
+    PUBLIC_ACL_ARGS = "--acl public-read"
 
     def __init__(self, spec_d, status_callback):
         log.info(f"{BUCKET_NAME=}")
         log.info(f"{NPM_REGISTRY=}")
         self.spec_d = spec_d
+        self.results_d = {}
         self.status_callack = status_callback
         self.prefix = Path(f"{BUCKET_NAME}/checks/{spec_d['check_id']}")
         self.check_dir = gettempdir() / self.prefix
@@ -106,6 +108,7 @@ class CheckRequest(object):
             "check_id": self.spec_d["check_id"],
             "step": self.step,
             "step_count": len(self.STATUS_MESSAGES),
+            "results": self.results_d,
         }
         if error:
             msg["error"] = error.to_dict()["error"]
@@ -165,19 +168,21 @@ class CheckRequest(object):
         await self.send_status()
 
     def get_code_snippet(self):
-        self.code_snippet = ""
-        self.code_path = None
+        code_snippet = ""
+        code_path = None
         # the storybook source might be a .jsx or .tsx file
         for p in Path("./").rglob(f"*/{self.spec_d['component']}.stories.[jt]sx"):
-            self.code_path = p
+            code_path = p
             with open(p) as fp:
                 for _ in range(5):
-                    self.code_snippet += fp.readline()
+                    code_snippet += fp.readline()
             break
-        log.info(f"{self.code_path=}")
+        self.results_d.update({"code_path": str(code_path), "code_snippet": code_snippet})
 
     def get_code_size(self):
-        self.code_size = sum(f.stat().st_size for f in self.code.glob("**/*") if f.is_file())
+        self.results_d["code_size"] = sum(
+            f.stat().st_size for f in self.code.glob("**/*") if f.is_file()
+        )
 
     async def install_packages(self):
         if NPM_REGISTRY is not None:
@@ -206,15 +211,23 @@ class CheckRequest(object):
             f"--serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
+
         screenshot = self.get_screenshot(quote=lambda x: x)
         self.screenshot = self.code / screenshot
-        if self.screenshot.exists():
-            await self.send_status()
-        else:
+        if not self.screenshot.exists():
             raise CheckError(
                 "storycap",
                 stderr=f"storycap ran successfully but expected screenshot {screenshot} wasn't created",
             )
+
+        await self.run_raise(
+            f"aws s3 cp {self.code}/__screenshots__ "
+            f"s3://{self.prefix}/report/__screenshots__ --recursive {self.PUBLIC_ACL_ARGS}",
+            e_key="aws",
+        )
+        self.results_d["url_screenshot"] = self.get_url(self.get_screenshot())
+
+        await self.send_status()
 
     async def run_visual_comparisons(self):
         self.gray_difference = Path("gray_difference.png")
@@ -248,43 +261,35 @@ class CheckRequest(object):
         if error:
             await self.send_status(error=error)
             raise error
+
+        for f in self.blue_difference, self.gray_difference:
+            key = str(f).split(".")[0]
+            await self.run_raise(
+                f"aws s3 cp {f} s3://{self.prefix}/report/{f} {self.PUBLIC_ACL_ARGS}",
+                e_key="aws",
+            )
+            self.results_d[f"url_{key}"] = self.get_url(f)
+
         await self.send_status()
 
     async def run_numeric_comparisons(self):
         # compare exits with code 1 even though it seems to have run successfully
-        _, _, self.mae = await run(f"compare -metric MAE '{self.screenshot}' '{self.frame}' null")
+        _, _, self.results_d["MAE"] = await run(
+            f"compare -metric MAE '{self.screenshot}' '{self.frame}' null"
+        )
         await self.send_status()
 
     def get_url(self, path_quoted):
         return get_s3_url(f"{self.prefix}/report/{path_quoted}")
 
     async def upload(self):
-        extra_args = "--acl public-read"
-        urls = {"url_screenshot": self.get_url(self.get_screenshot())}
-        await self.run_raise(
-            f"aws s3 cp {self.code}/__screenshots__ "
-            f"s3://{self.prefix}/report/__screenshots__ --recursive {extra_args}",
-            e_key="aws",
-        )
-        for f in self.blue_difference, self.gray_difference:
-            key = str(f).split(".")[0]
-            urls[f"url_{key}"] = self.get_url(f)
-            await self.run_raise(
-                f"aws s3 cp {f} s3://{self.prefix}/report/{f} {extra_args}",
-                e_key="aws",
-            )
-        self.stop = time()
-        log.info(f"check done {self.stop - self.start} seconds")
+        self.results_d["completed_at"] = time()
+        duration = self.results_d["completed_at"] - self.results_d["created_at"]
+        log.info(f"check done {duration} seconds")
         json.dump(
             {
                 **self.spec_d,
-                **urls,
-                "MAE": self.mae,
-                "created_at": self.start,
-                "completed_at": self.stop,
-                "code_path": str(self.code_path),
-                "code_snippet": self.code_snippet,
-                "code_size": self.code_size,
+                **self.results_d,
             },
             open(self.results, "w"),
         )
@@ -298,7 +303,7 @@ class CheckRequest(object):
 
     async def run(self):
         try:
-            self.start = time()
+            self.results_d["created_at"] = time()
             await run_seq([self.df, self.send_status, self.download, self.run_git])
             with set_directory(self.code):
                 # delete the node_modules directory; it's too big to persist

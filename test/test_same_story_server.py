@@ -9,15 +9,17 @@ from same_story_api.helpful_scripts import Client, setup_env, setup_logging
 
 _ = lambda s: s
 
+# (message, (key, ))
+# where key is a key in results.json
 STATUS_MESSAGES = [
-    _("job started"),
-    _("downloaded Figma check frame"),
-    _("checked out code"),
-    _("installed packages"),
-    _("captured screenshots"),
-    _("completed visual comparisons"),
-    _("completed numeric comparisons"),
-    _("uploaded screenshots"),
+    (_("job started"), ("created_at",)),
+    (_("downloaded Figma check frame"), ()),
+    (_("checked out code"), ("code_path", "code_size", "code_snippet")),
+    (_("installed packages"), ()),
+    (_("captured screenshots"), ("url_screenshot",)),
+    (_("completed visual comparisons"), ()),
+    (_("completed numeric comparisons"), ("MAE",)),
+    (_("uploaded screenshots"), ("url_blue_difference", "url_gray_difference", "completed_at")),
 ]
 
 log = setup_logging()
@@ -130,7 +132,7 @@ def check_spec_in_results(spec, results):
 def get_error(results, key):
     check_spec_in_results(results["spec"], results["results"])
     error = results["results"]["error"]
-    for (i, msg), status in zip_longest(enumerate(STATUS_MESSAGES), results["status"]):
+    for (i, (msg, _)), status in zip_longest(enumerate(STATUS_MESSAGES), results["status"]):
         error_ = status.get("error")
         if error_:
             assert error_ == error
@@ -155,10 +157,14 @@ def check_code_snippet_in_results(results):
 
 # TODO check for code_snippet and url_screenshot on a given step
 def check_status_messages(success_results):
-    for (i, msg), status in zip_longest(enumerate(STATUS_MESSAGES), success_results["status"]):
+    for (i, (msg, keys)), status in zip_longest(
+        enumerate(STATUS_MESSAGES), success_results["status"]
+    ):
         assert status["step"] == i
         assert status["step_count"] == len(STATUS_MESSAGES)
         assert status["message"] == msg
+        for key in keys:
+            assert key in status["results"]
 
 
 def test_should_be_able_to_successfully_run_check(success_results):
