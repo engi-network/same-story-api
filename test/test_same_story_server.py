@@ -147,23 +147,19 @@ def get_error(results, key):
 
 
 def check_code_snippets_in_results(results):
-    (p1, p2) = results["code_paths"]
-    (s1, s2) = results["code_snippets"]
-    assert p1 == "src/stories/Button.jsx"
-    assert (
-        s1 == "import React from 'react';\n"
+    snippet_map = {
+        "src/stories/Button.jsx": "import React from 'react';\n"
         "import PropTypes from "
         "'prop-types';\n"
         "import './button.css';\n"
         "\n"
-        "/**\n"
-    )
-    assert p2 == "src/stories/Button.stories.jsx"
-    assert (
-        s2 == "import React from 'react';\n\n"
+        "/**\n",
+        "src/stories/Button.stories.jsx": "import React from 'react';\n\n"
         "import { Button } from './Button';\n\n"
-        "// More on default export: https://storybook.js.org/docs/react/writing-stories/introduction#default-export\n"
-    )
+        "// More on default export: https://storybook.js.org/docs/react/writing-stories/introduction#default-export\n",
+    }
+    for (code_path, code_snippet) in zip(results["code_paths"], results["code_snippets"]):
+        assert snippet_map[code_path] == code_snippet
 
 
 def check_status_messages(success_results):
