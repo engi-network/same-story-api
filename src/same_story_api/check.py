@@ -79,6 +79,15 @@ async def run_seq(funcs):
     [await f() for f in funcs]
 
 
+def head(path, n=5):
+    """Return the first n lines of file path"""
+    snippet = ""
+    with open(path) as fp:
+        for _ in range(n):
+            snippet += fp.readline()
+    return snippet
+
+
 class CheckRequest(object):
     STATUS_MESSAGES = [
         _("job started"),
@@ -163,21 +172,19 @@ class CheckRequest(object):
             await self.run_raise(f"{self.github_cmd} repo sync{branch_cmd}", e_key="branch")
         if commit:
             await self.run_raise(f"git checkout {commit}", e_key="commit")
-        self.get_code_snippet()
+        self.get_code_snippets()
         self.get_code_size()
         await self.send_status()
 
-    def get_code_snippet(self):
-        code_snippet = ""
-        code_path = None
+    def get_code_snippets(self):
+        code_snippets = []
+        code_paths = []
         # the storybook source might be a .jsx or .tsx file
-        for p in Path("./").rglob(f"*/{self.spec_d['component']}.stories.[jt]sx"):
-            code_path = p
-            with open(p) as fp:
-                for _ in range(5):
-                    code_snippet += fp.readline()
-            break
-        self.results_d.update({"code_path": str(code_path), "code_snippet": code_snippet})
+        for p in Path("./").rglob(f"*/{self.spec_d['component']}*.[jt]sx"):
+            code_paths.append(str(p))
+            code_snippets.append(head(p))
+
+        self.results_d.update({"code_paths": code_paths, "code_snippets": code_snippets})
 
     def get_code_size(self):
         self.results_d["code_size"] = sum(

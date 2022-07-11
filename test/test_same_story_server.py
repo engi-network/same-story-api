@@ -14,7 +14,7 @@ _ = lambda s: s
 STATUS_MESSAGES = [
     (_("job started"), ("created_at",)),
     (_("downloaded Figma check frame"), ()),
-    (_("checked out code"), ("code_path", "code_size", "code_snippet")),
+    (_("checked out code"), ("code_paths", "code_size", "code_snippets")),
     (_("installed packages"), ()),
     (_("captured screenshots"), ("url_screenshot",)),
     (_("completed visual comparisons"), ()),
@@ -146,16 +146,26 @@ def get_error(results, key):
     assert set(error.keys()) >= set([key, "stdout", "stderr"])
 
 
-def check_code_snippet_in_results(results):
-    assert results["code_path"] == "src/stories/Button.stories.jsx"
+def check_code_snippets_in_results(results):
+    (p1, p2) = results["code_paths"]
+    (s1, s2) = results["code_snippets"]
+    assert p1 == "src/stories/Button.jsx"
     assert (
-        results["code_snippet"] == "import React from 'react';\n\n"
+        s1 == "import React from 'react';\n"
+        "import PropTypes from "
+        "'prop-types';\n"
+        "import './button.css';\n"
+        "\n"
+        "/**\n"
+    )
+    assert p2 == "src/stories/Button.stories.jsx"
+    assert (
+        s2 == "import React from 'react';\n\n"
         "import { Button } from './Button';\n\n"
         "// More on default export: https://storybook.js.org/docs/react/writing-stories/introduction#default-export\n"
     )
 
 
-# TODO check for code_snippet and url_screenshot on a given step
 def check_status_messages(success_results):
     for (i, (msg, keys)), status in zip_longest(
         enumerate(STATUS_MESSAGES), success_results["status"]
@@ -193,7 +203,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     duration = results["completed_at"] - results["created_at"]
     assert duration > 0 and duration < 200
     check_spec_in_results(spec_d, results)
-    check_code_snippet_in_results(results)
+    check_code_snippets_in_results(results)
     code_size = results["code_size"]
     assert code_size > 2000000 and code_size < 5000000
     for key in ("gray_difference", "blue_difference", "screenshot"):
