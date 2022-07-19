@@ -6,12 +6,18 @@ import re
 import sys
 from asyncio.subprocess import PIPE
 from pathlib import Path
-from shlex import quote
+from shlex import quote as sh_quote
 from time import perf_counter, time
 from urllib.parse import quote
 
-from helpful_scripts import get_port, get_s3_url, setup_logging
-from same_story_api.helpful_scripts import cleanup_directory, set_directory
+from helpful_scripts import (
+    cleanup_directory,
+    get_port,
+    get_s3_url,
+    make_s3_public,
+    set_directory,
+    setup_logging,
+)
 
 log = setup_logging()
 
@@ -135,14 +141,21 @@ class CheckRequest(object):
         self.node_modules = self.code / "node_modules"
         self.results = "results.json"
         self.story = self.spec_d["story"]
-        self.frame = self.check_dir / f"frames/{self.story}.png"
-        error = None if self.frame.exists() else CheckError("frame", stderr=str(self.frame))
+        frame = f"frames/{self.story}.png"
+        self.frame = self.check_dir / frame
+        if self.frame.exists():
+            frame_full = f"{self.prefix}/{frame}"
+            error = None
+            make_s3_public(frame_full)
+            self.results_d["url_check_frame"] = get_s3_url(quote(frame_full))
+        else:
+            error = CheckError("frame", stderr=str(f"failed to download {frame}"))
         await self.send_status(error=error)
         if error:
             raise error
 
     async def run_git(self):
-        github_token = quote(self.spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
+        github_token = sh_quote(self.spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
         # don't ask 😆
         self.github_cmd = f"GITHUB_TOKEN='{github_token}' gh"
         github_opts = (

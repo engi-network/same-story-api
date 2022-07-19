@@ -92,6 +92,12 @@ def get_s3_url(suffix):
     return f"{s3_client.meta.endpoint_url}/{suffix}"
 
 
+def make_s3_public(suffix):
+    bits = suffix.split("/")
+    bucket, key = bits[0], "/".join(bits[1:])
+    return boto3.resource("s3").ObjectAcl(bucket, key).put(ACL="public-read")
+
+
 def allow_all_to_publish_to_sns(topic_arn):
     return """{{
         "Id": "Policy1654105353800",

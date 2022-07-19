@@ -202,7 +202,7 @@ def test_should_be_able_to_successfully_run_check(success_results):
     check_code_snippets_in_results(results)
     code_size = results["code_size"]
     assert code_size > 2000000 and code_size < 5000000
-    for key in ("gray_difference", "blue_difference", "screenshot"):
+    for key in ("check_frame", "gray_difference", "blue_difference", "screenshot"):
         check_url(results[f"url_{key}"])
 
 
