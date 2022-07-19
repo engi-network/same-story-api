@@ -13,7 +13,7 @@ _ = lambda s: s
 # where key is a key in results.json
 STATUS_MESSAGES = [
     (_("job started"), ("created_at",)),
-    (_("downloaded Figma check frame"), ()),
+    (_("downloaded Figma check frame"), ("url_check_frame",)),
     (_("checked out code"), ("code_paths", "code_size", "code_snippets")),
     (_("installed packages"), ()),
     (_("captured screenshots"), ("url_screenshot",)),
