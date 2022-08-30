@@ -246,7 +246,7 @@ class CheckRequest(object):
     async def run_storycap(self):
         port = get_port()
         await self.run_raise(
-            f"npx storycap --verbose http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
+            f"npx storycap http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
             f"{self.get_query()} --include '{self.get_include()}' --serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
