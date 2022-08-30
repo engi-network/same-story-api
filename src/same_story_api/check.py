@@ -32,7 +32,7 @@ async def run(cmd, log_cmd=None):
     if log_cmd is None:
         log_cmd = cmd
     # don't log env vars
-    log_cmd = re.subn("\S+=\S+ ", "", log_cmd)[0]
+    log_cmd = re.subn("^\S+=\S+ ", "", log_cmd)[0]
     log.info(log_cmd)
     t1_start = perf_counter()
     proc = await asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
@@ -215,20 +215,39 @@ class CheckRequest(object):
         width = int(self.spec_d.get("width", "800"))
         return f"--viewport {width}x{height}"
 
+    def get_query(self):
+        def get(key):
+            return self.spec_d[key].lower()
+
+        args = self.spec_d.get("args")
+        return "--additionalQuery 'path=/story/{path}-{component}--{story}{args}'".format(
+            path=get("path"),
+            component=get("component"),
+            story=get("story"),
+            args="&args={}".format(
+                ";".join([f"{val['name']}:{val['value']}" for val in args.values()])
+            )
+            if args
+            else "",
+        )
+
+    def get_include(self, quote=quote):
+        story = quote(self.story)
+        return f"{self.spec_d['path']}/{self.spec_d['component']}/{story}"
+
     def get_timeout(self):
         server_timeout = int(self.spec_d.get("server_timeout", 50_000))
         capture_timeout = int(self.spec_d.get("capture_timeout", 10_000))
         return f"--serverTimeout {server_timeout} --captureTimeout {capture_timeout} "
 
     def get_screenshot(self, quote=quote):
-        story = quote(self.story)
-        return f"__screenshots__/{self.spec_d['path']}/{self.spec_d['component']}/{story}.png"
+        return f"__screenshots__/{self.get_include(quote=quote)}.png"
 
     async def run_storycap(self):
         port = get_port()
         await self.run_raise(
-            f"npx storycap http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
-            f"--serverCmd 'start-storybook -p {port}'",
+            f"npx storycap --verbose http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
+            f"{self.get_query()} --include '{self.get_include()}' --serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
 
