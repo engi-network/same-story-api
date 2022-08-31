@@ -235,6 +235,9 @@ class CheckRequest(object):
         story = quote(self.story)
         return f"{self.spec_d['path']}/{self.spec_d['component']}/{story}"
 
+    def get_story_include(self):
+        return f"--include '{self.get_include(quote=lambda x: x)}'"
+
     def get_timeout(self):
         server_timeout = int(self.spec_d.get("server_timeout", 50_000))
         capture_timeout = int(self.spec_d.get("capture_timeout", 10_000))
@@ -247,7 +250,7 @@ class CheckRequest(object):
         port = get_port()
         await self.run_raise(
             f"npx storycap http://localhost:{port} {self.get_dims()} {self.get_timeout()} "
-            f"{self.get_query()} --include '{self.get_include()}' --serverCmd 'start-storybook -p {port}'",
+            f"{self.get_query()} {self.get_story_include()} --serverCmd 'start-storybook -p {port}'",
             e_key="storycap",
         )
 
