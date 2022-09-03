@@ -217,7 +217,7 @@ class CheckRequest(object):
 
     def get_query(self):
         def get(key):
-            return self.spec_d[key].lower()
+            return self.spec_d[key].lower().replace(" ", "-").replace("/", "-")
 
         args = self.spec_d.get("args")
         return "--additionalQuery 'path=/story/{path}-{component}--{story}{args}'".format(

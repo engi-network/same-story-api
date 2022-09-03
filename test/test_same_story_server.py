@@ -54,21 +54,21 @@ def success_spec():
 
 # a second request for a different repo that should succeed
 # initially had trouble with this one b/c spaces in name
-# @pytest.fixture
-# def success_spec2():
-#     return {
-#         "args": {"0": {"name": "primary", "value": "false"}},
-#         "branch": "main",
-#         "check_id": str(uuid4()),
-#         "commit": "28d791f2d77de69ee038a15b9fd7783179a65b2d",
-#         "component": "Button",
-#         "height": "340",
-#         "name": "Button-Button With Knobs",
-#         "path": "Global/Components",
-#         "repository": "engi-network/figma-plugin",
-#         "story": "Button Story",
-#         "width": "439",
-#     }
+@pytest.fixture
+def success_spec2():
+    return {
+        "args": {"0": {"name": "primary", "value": "false"}},
+        "branch": "main",
+        "check_id": str(uuid4()),
+        "commit": "28d791f2d77de69ee038a15b9fd7783179a65b2d",
+        "component": "Button",
+        "height": "340",
+        "name": "Button-Button With Knobs",
+        "path": "Global/Components",
+        "repository": "engi-network/figma-plugin",
+        "story": "Button Story",
+        "width": "439",
+    }
 
 
 class Request(object):
@@ -94,10 +94,10 @@ def success_results(success_spec):
         yield req.results
 
 
-# @pytest.fixture
-# def success_results2(success_spec2):
-#     with Request(success_spec2) as req:
-#         yield req.results
+@pytest.fixture
+def success_results2(success_spec2):
+    with Request(success_spec2) as req:
+        yield req.results
 
 
 @pytest.fixture
@@ -235,8 +235,9 @@ def test_should_be_able_to_successfully_run_check(success_results):
         check_url(results[f"url_{key}"])
 
 
-# def test_should_be_able_to_successfully_run_check2(success_results2):
-#     return test_should_be_able_to_successfully_run_check(success_results2)
+@pytest.mark.skip(reason="in the interest of time")
+def test_should_be_able_to_successfully_run_check2(success_results2):
+    return test_should_be_able_to_successfully_run_check(success_results2)
 
 
 def test_should_be_able_to_successfully_run_check_no_branch_commit(
