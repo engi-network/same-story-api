@@ -6,9 +6,9 @@ RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key C99B11DEB97
 RUN apt-get -y update
 RUN apt-get -yq install software-properties-common
 RUN apt-get -y update
-RUN apt-add-repository https://cli.github.com/packages
-RUN apt-get -y update
-RUN apt-get -yq install jq openssh-client gh imagemagick curl unzip 
+RUN apt-get -yq install jq openssh-client imagemagick curl unzip
+
+RUN FILE=gh_2.14.7_linux_$(dpkg --print-architecture).deb && curl -sLO https://github.com/cli/cli/releases/download/v2.14.7/$FILE && dpkg -i $FILE
 
 RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
 RUN apt-get install -y nodejs
