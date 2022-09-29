@@ -263,11 +263,8 @@ class SNSFanoutSQS(object):
     def __enter__(self):
         return self.create()
 
-    def publish(self, d):
-        return self.sns.publish(
-            TopicArn=self.topic_arn,
-            Message=json.dumps(d),
-        )
+    def publish(self, d, **kwargs):
+        return self.sns.publish(TopicArn=self.topic_arn, Message=json.dumps(d), **kwargs)
 
     def receive(self, wait_time=5):
         r = self.sqs.receive_message(
