@@ -13,7 +13,7 @@ services:
     env_file: .env
   celery:
     build: .
-    command: celery -A same_story_api.tasks worker --loglevel=INFO -B
+    command: celery -A engi_message_queue.tasks worker --loglevel=INFO -B
     volumes: *volumes
     env_file: .env
   test:

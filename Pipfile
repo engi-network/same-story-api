@@ -10,6 +10,7 @@ coloredlogs = "*"
 python-dotenv = "*"
 same-story-api-engi = {editable = true, path = "."}
 celery = {extras = ["sqs"], version = "*"}
+message-queue-engi = {git = "https://github.com/engi-network/engi-message-queue.git"}
 
 [dev-packages]
 jupyterlab = "*"

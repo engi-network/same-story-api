@@ -9,12 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from same_story_api.helpful_scripts import (
-    SNSFanoutSQS,
-    get_name,
-    setup_env,
-    setup_logging,
-)
+from engi_message_queue import SNSFanoutSQS, get_name
+
+from same_story_api.helpful_scripts import setup_env, setup_logging
 
 setup_env()
 

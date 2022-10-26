@@ -20,6 +20,9 @@ AWS_DEFAULT_REGION="us-west-2"
 # GitHub personal access token
 GITHUB_TOKEN=""
 
+# Prefix for SNS -> SQS fanouts
+ENGI_MESSAGE_QUEUE_APP_NAME = "same-story-api"
+
 # where the server dequeues jobs from SQS
 QUEUE_URL="https://us-west-2.queue.amazonaws.com/163803973373/same-story-check-queue"
 # where the test code queues jobs 

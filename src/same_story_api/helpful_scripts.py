@@ -10,12 +10,13 @@ from pathlib import Path
 
 import boto3
 import coloredlogs
+from engi_message_queue import get_name
 
 
 def setup_logging(log_level=logging.INFO):
     logger = logging.getLogger()
 
-    # Set log format to dislay the logger name to hunt down verbose logging modules
+    # set log format to display the logger name to hunt down verbose logging modules
     fmt = "%(asctime)s %(name)-25s %(levelname)-8s %(message)s"
 
     coloredlogs.install(level=log_level, fmt=fmt, logger=logger)
@@ -32,12 +33,6 @@ sts_client = boto3.client("sts")
 
 AWS_REGION = boto3.session.Session().region_name
 AWS_ACCOUNT = sts_client.get_caller_identity()["Account"]
-
-
-def get_name(env=None):
-    if env is None:
-        env = os.environ.get("ENV", "dev")
-    return f"same-story-api-{env}"
 
 
 def get_sns_arn(name):
