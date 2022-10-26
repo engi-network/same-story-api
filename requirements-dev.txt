@@ -22,7 +22,7 @@ humanfriendly==10.0
 idna==3.3
 jmespath==1.0.1
 kombu==5.2.4
-git+https://github.com/engi-network/engi-message-queue.git@e9dffcf4c44fab59767c1e3499f967a5e1670000#egg=message-queue-engi
+git+https://github.com/engi-network/engi-message-queue.git@9e5d12ddd2e289d92ae776ad7dd6b5c91cb10304#egg=message-queue-engi
 multidict==6.0.2
 prompt-toolkit==3.0.29
 pycurl==7.44.1
