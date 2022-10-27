@@ -145,6 +145,13 @@ const run = async () => {
 run();
 ```
 
+## Generate requirements 
+
+```bash
+pipenv requirements | grep -v message-queue-engi  >requirements.txt
+pipenv requirements --dev | grep -v message-queue-engi  >requirements-dev.txt
+```
+
 ## CI/CD
 
 [CircleCI](https://app.circleci.com/pipelines/github/engi-network/same-story-api) is invoked each time you push to GitHub.

@@ -9,8 +9,8 @@ aiobotocore = "*"
 coloredlogs = "*"
 python-dotenv = "*"
 same-story-api-engi = {editable = true, path = "."}
-celery = {extras = ["sqs"], version = "*"}
 message-queue-engi = {git = "https://github.com/engi-network/engi-message-queue.git"}
+celery = {extras = ["sqs"], version = "*"}
 
 [dev-packages]
 jupyterlab = "*"

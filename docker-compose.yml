@@ -16,7 +16,7 @@ services:
     command: celery -A engi_message_queue.tasks worker --loglevel=INFO -B
     volumes: *volumes
     env_file: .env
-  test:
+  tests:
     build:
       context: .
       dockerfile: Dockerfile.test

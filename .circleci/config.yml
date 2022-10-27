@@ -67,7 +67,7 @@ jobs:
           command: "docker-compose build"
       - run:
           name: "Start worker and test"
-          command: "docker-compose up --exit-code-from test"
+          command: "docker-compose up --exit-code-from tests"
   deploy-staging:
     machine:
       image: ubuntu-2004:202201-01
