@@ -44,7 +44,7 @@ def success_spec():
         "story": "Primary",
         "repository": "engi-network/same-story-storybook",
         "branch": "master",  # optional
-        "commit": "8ec97476b1d1f588e9846c8a0dcbc88acb6bb934",  # optional
+        "commit": "61a8bd8",  # optional
         "args": {
             "0": {"name": "primary", "value": "false"},
             "1": {"name": "size", "value": "small"},

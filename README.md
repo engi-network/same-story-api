@@ -148,8 +148,8 @@ run();
 ## Generate requirements 
 
 ```bash
-pipenv requirements | grep -v message-queue-engi  >requirements.txt
-pipenv requirements --dev | grep -v message-queue-engi  >requirements-dev.txt
+pipenv requirements | egrep -v 'cli-engi|message-queue-engi'  >requirements.txt
+pipenv requirements --dev | egrep -v 'cli-engi|message-queue-engi'  >requirements-dev.txt
 ```
 
 ## CI/CD

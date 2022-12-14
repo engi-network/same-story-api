@@ -7,9 +7,10 @@ name = "pypi"
 aiobotocore = "*"
 coloredlogs = "*"
 python-dotenv = "*"
-same-story-api-engi = {editable = true, path = "."}
 message-queue-engi = {git = "https://github.com/engi-network/engi-message-queue.git"}
 celery = {extras = ["sqs"], version = "*"}
+install = "*"
+engi-cli = {path = "./../cli"}
 
 [dev-packages]
 jupyterlab = "*"

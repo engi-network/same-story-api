@@ -92,6 +92,7 @@ workflows:
           context:
             - aws
             - github
+            - git-secrets
           filters:
             branches:
               only: master

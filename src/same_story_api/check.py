@@ -10,6 +10,7 @@ from shlex import quote as sh_quote
 from time import perf_counter, time
 from urllib.parse import quote
 
+from engi_cli.helpful_scripts import get_git_secrets, is_git_secrets
 from helpful_scripts import (
     cleanup_directory,
     get_port,
@@ -189,6 +190,11 @@ class CheckRequest(object):
         self.get_code_size()
         await self.send_status()
 
+    async def reveal_secrets(self):
+        # if this repo contains git secrets reveal them
+        if await is_git_secrets():
+            await get_git_secrets()
+
     def get_code_snippets(self):
         code_snippets = []
         code_paths = []
@@ -353,6 +359,7 @@ class CheckRequest(object):
                     await run_seq(
                         [
                             self.sync_repo,
+                            self.reveal_secrets,
                             self.install_packages,
                             self.run_storycap,
                             self.run_visual_comparisons,
