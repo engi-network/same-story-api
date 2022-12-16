@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import os
 import signal
 
@@ -10,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from engi_message_queue import SNSFanoutSQS, get_name
-from same_story_api.helpful_scripts import setup_env, setup_logging
+from helpful_scripts import log, setup_env
 
 setup_env()
 
@@ -29,10 +28,6 @@ ECS_SIG_CANCEL = signal.SIGTERM
 # how long to wait for running tasks to complete after ECS_SIG_CANCEL, should be
 # longer than it takes to complete the task
 TASK_SHUTDOWN_SECS = int(os.environ.get("TASK_SHUTDOWN_SECS", 120))
-
-debug = os.environ.get("DEBUG", False)
-log_level = logging.DEBUG if debug else logging.INFO
-log = setup_logging(log_level)
 
 
 def get_sns_topic(spec_d):

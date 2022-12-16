@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import shutil
 import socket
@@ -8,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import boto3
-import coloredlogs
+from engi_helpful_scripts.log import setup_logging
 from engi_message_queue import (
     NullFanout,
     SNSFanoutSQS,
@@ -20,18 +19,7 @@ from engi_message_queue import (
 sns_client = boto3.client("sns")
 
 
-def setup_logging(name="same_story_api", log_level=logging.INFO):
-    logger = logging.getLogger(name)
-
-    # set log format to display the logger name to hunt down verbose logging modules
-    fmt = "%(asctime)s %(name)s %(levelname)s %(message)s"
-
-    coloredlogs.install(level=log_level, fmt=fmt, logger=logger)
-
-    return logger
-
-
-log = setup_logging()
+log = setup_logging("engi-same-story-api")
 
 s3_client = boto3.client("s3")
 
@@ -51,16 +39,6 @@ def setup_env(env=None):
     # a place for the backend server to dequeue job requests
     os.environ["QUEUE_URL"] = get_sqs_url(name)
     log.info(f"{os.environ['QUEUE_URL']=}")
-
-
-@contextmanager
-def set_directory(path):
-    origin = Path().absolute()
-    try:
-        os.chdir(path)
-        yield
-    finally:
-        os.chdir(origin)
 
 
 @contextmanager
@@ -134,7 +112,7 @@ class Client(object):
         r = s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=key_name)
         return "Contents" in r
 
-    def get_results(self, spec_d, path, upload=True, callback=None, no_status=False):
+    def get_results(self, spec_d, path, upload=True, callback=None, no_status=False, wait=2):
         self.spec_d = spec_d
         check_id = spec_d["check_id"]
         self.prefix = f"checks/{check_id}"
@@ -180,7 +158,7 @@ class Client(object):
                             done = True
                 count -= 1
             if done:
-                time.sleep(1)
+                time.sleep(wait)
                 results_d["results"] = json.loads(self.download(results))
 
         log.info(f"got {results_d=}")

@@ -2,54 +2,26 @@ import asyncio
 import gettext
 import json
 import os
-import re
 import sys
-from asyncio.subprocess import PIPE
 from pathlib import Path
 from shlex import quote as sh_quote
-from time import perf_counter, time
+from time import time
 from urllib.parse import quote
 
-from engi_cli.helpful_scripts import get_git_secrets, is_git_secrets
-from helpful_scripts import (
-    cleanup_directory,
-    get_port,
-    get_s3_url,
-    make_s3_public,
-    set_directory,
-    setup_logging,
+from engi_helpful_scripts.git import (
+    get_git_secrets,
+    git_sync,
+    github_checkout,
+    is_git_secrets,
 )
-
-log = setup_logging()
+from engi_helpful_scripts.run import CmdError, run, set_directory
+from helpful_scripts import cleanup_directory, get_port, get_s3_url, log, make_s3_public
 
 _ = gettext.gettext
 
 
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 NPM_REGISTRY = os.environ.get("NPM_REGISTRY")
-
-
-async def run(cmd, log_cmd=None):
-    if log_cmd is None:
-        log_cmd = cmd
-    # don't log env vars
-    log_cmd = re.subn("^\S+=\S+ ", "", log_cmd)[0]
-    log.info(log_cmd)
-    t1_start = perf_counter()
-    proc = await asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = await proc.communicate()
-    stdout = stdout.decode() if stdout else None
-    stderr = stderr.decode() if stderr else None
-    t1_stop = perf_counter()
-
-    if stdout:
-        log.info(f"[stdout]\n{stdout}")
-    if stderr:
-        log.info(f"[stderr]\n{stderr}")
-    log.info(
-        f"{log_cmd!r} exited with code {proc.returncode} elapsed {t1_stop - t1_start} seconds"
-    )
-    return proc.returncode, stdout, stderr
 
 
 class CheckError(Exception):
@@ -93,6 +65,17 @@ def head(path, n=5):
         for _ in range(n):
             snippet += fp.readline()
     return snippet
+
+
+def raise_or_return(cmd_exit, returncode=0, e_key=None):
+    error = (
+        CheckError(e_key, cmd_exit.stdout, cmd_exit.stderr)
+        if returncode != cmd_exit.returncode
+        else None
+    )
+    if error:
+        raise error
+    return cmd_exit.returncode
 
 
 class CheckRequest(object):
@@ -157,35 +140,21 @@ class CheckRequest(object):
 
     async def run_git(self):
         github_token = sh_quote(self.spec_d.get("github_token", os.environ["GITHUB_TOKEN"]))
-        # don't ask 😆
-        self.github_cmd = f"GITHUB_TOKEN='{github_token}' gh"
-        github_opts = (
-            f"-- -c url.'https://{github_token}:@github.com/'.insteadOf='https://github.com/'"
-        )
-        # oh, alright then -- the -c option lets us use the GitHub personal access
-        # token as the Git credential helper
         if not self.code.exists():
-            self.sync = False
-            log_cmd = f"{self.github_cmd} repo clone {self.repo} {self.code}"
-            await self.run_raise(
-                f"{log_cmd} {github_opts}",
-                e_key="clone",
-                log_cmd=log_cmd,  # don't log secrets
-            )
+            try:
+                await github_checkout(self.repo, self.code, github_token=github_token)
+            except CmdError as e:
+                return raise_or_return(e.cmd_exit, e_key="clone")
         else:
             self.sync = True
 
     async def sync_repo(self):
         branch = self.spec_d.get("branch")
-        branch_cmd = f" --branch {branch}" if branch is not None else ""
         commit = self.spec_d.get("commit")
-        if self.sync:
-            # stash any local changes, e.g. package-lock.json
-            await self.run_raise(f"git stash", e_key="clone")
-        if branch:
-            await self.run_raise(f"{self.github_cmd} repo sync{branch_cmd}", e_key="branch")
-        if commit:
-            await self.run_raise(f"git checkout {commit}", e_key="commit")
+        try:
+            await git_sync(branch, commit)
+        except CmdError as e:
+            raise_or_return(e.cmd_exit, e_key="branch" if branch in e.cmd else "commit")
         self.get_code_snippets()
         self.get_code_size()
         await self.send_status()
@@ -299,7 +268,8 @@ class CheckRequest(object):
         # compare exits with code 1 even though it seems to have run successfully
         await run(
             f"compare '{self.screenshot}' '{self.frame}' "
-            f"-highlight-color blue {self.blue_difference}"
+            f"-highlight-color blue {self.blue_difference}",
+            raise_code=None,
         )
         error = (
             None
@@ -322,9 +292,10 @@ class CheckRequest(object):
 
     async def run_numeric_comparisons(self):
         # compare exits with code 1 even though it seems to have run successfully
-        _, _, self.results_d["MAE"] = await run(
-            f"compare -metric MAE '{self.screenshot}' '{self.frame}' null"
+        cmd_exit = await run(
+            f"compare -metric MAE '{self.screenshot}' '{self.frame}' null", raise_code=None
         )
+        self.results_d["MAE"] = cmd_exit.stderr.strip()
         await self.send_status()
 
     def get_url(self, path_quoted):
@@ -379,11 +350,8 @@ class CheckRequest(object):
             await self.send_status(error=e)
 
     async def run_raise(self, cmd, returncode=0, e_key=None, log_cmd=None):
-        returncode_, stdout, stderr = await run(cmd, log_cmd=log_cmd)
-        error = CheckError(e_key, stdout, stderr) if returncode_ != returncode else None
-        if error:
-            raise error
-        return returncode_
+        cmd_exit = await run(cmd, log_cmd=log_cmd, raise_code=None)
+        return raise_or_return(cmd_exit, returncode, e_key)
 
 
 def gettempdir():

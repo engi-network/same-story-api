@@ -1,11 +1,12 @@
 import os
+from copy import deepcopy
 from itertools import zip_longest
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import requests
-from same_story_api.helpful_scripts import Client, setup_env, setup_logging
+from same_story_api.helpful_scripts import Client, log, setup_env
 
 _ = lambda s: s
 
@@ -21,8 +22,6 @@ STATUS_MESSAGES = [
     (_("completed numeric comparisons"), ("MAE",)),
     (_("uploaded screenshots"), ("url_blue_difference", "url_gray_difference", "completed_at")),
 ]
-
-log = setup_logging()
 
 setup_env()
 
@@ -42,7 +41,7 @@ def success_spec():
         "path": "Example",
         "component": "Button",
         "story": "Primary",
-        "repository": "engi-network/same-story-storybook",
+        "repository": "https://github.com/engi-network/same-story-storybook.git",
         "branch": "master",  # optional
         "commit": "61a8bd8",  # optional
         "args": {
@@ -65,7 +64,7 @@ def success_spec2():
         "height": "340",
         "name": "Button-Button With Knobs",
         "path": "Global/Components",
-        "repository": "engi-network/figma-plugin",
+        "repository": "https://github.com/engi-network/figma-plugin.git",
         "story": "Button Story",
         "width": "439",
     }
@@ -116,6 +115,7 @@ def error_results_commit(success_spec):
 
 @pytest.fixture
 def error_results_branch(success_spec):
+    success_spec["commit"] = None
     success_spec["branch"] = "nonsense"
     with Request(success_spec) as req:
         yield req.results
@@ -136,19 +136,27 @@ def success_results_no_commit_branch(success_spec):
 
 
 @pytest.fixture
-def success_results_private_repo(success_spec):
-    del success_spec["branch"]
-    del success_spec["commit"]
-    success_spec["repository"] = success_spec["repository"].replace("engi-network", "cck197")
-    success_spec["github_token"] = os.environ["GITHUB_TOKEN_2"]
-    with Request(success_spec) as req:
+def private_repo_spec(success_spec):
+    spec = deepcopy(success_spec)
+    del spec["branch"]
+    del spec["commit"]
+    spec["repository"] = spec["repository"].replace("engi-network", "cck197")
+    yield spec
+
+
+@pytest.fixture
+def success_results_private_repo(private_repo_spec):
+    spec = deepcopy(private_repo_spec)
+    spec["github_token"] = os.environ["GITHUB_TOKEN_2"]
+    with Request(spec) as req:
         yield req.results
 
 
 @pytest.fixture
-def error_results_with_github_token(success_spec):
-    success_spec["github_token"] = "nonsense"
-    with Request(success_spec) as req:
+def error_results_with_github_token(private_repo_spec):
+    spec = deepcopy(private_repo_spec)
+    spec["github_token"] = "nonsense"
+    with Request(spec) as req:
         yield req.results
 
 

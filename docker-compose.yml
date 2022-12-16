@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.test
-    command: pytest
+    command: pytest -v -s # test/test_same_story_server.py::test_should_error_on_repo_problem
     volumes: *volumes
     env_file: .env
     depends_on:
